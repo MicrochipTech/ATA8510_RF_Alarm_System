@@ -1,0 +1,189 @@
+/* *ASM************************************************************************
+  Use of this software is subject to Atmel's Software License Agreement.
+-------------------------------------------------------------------------------
+  $URL: http://svnservulm.corp.atmel.com/svn/CDB/Apps/Apps_SW/Trunk/SW_Projects/XC8/ATA8510_FLASH_XC8/src/firmware/timer1/src/timer1_asm.s90 $
+  $LastChangedRevision: 648718 $
+  $LastChangedDate: 2021-10-27 15:12:44 +0200 (Mi, 27 Okt 2021) $
+  $LastChangedBy: gwillbol $
+-------------------------------------------------------------------------------
+  Project:      ATA5831
+  Target MCU:   ATA5831
+  Compiler:     IAR Assembler for AVR 5.51.0
+-------------------------------------------------------------------------------
+  
+******************************************************************************
+* Copyright 2011, Atmel Automotive GmbH                                       *
+*                                                                             *
+* This software is owned by the Atmel Automotive GmbH                         *
+* and is protected by and subject to worldwide patent protection.             *
+* Atmel hereby grants to licensee a personal,                                 *
+* non-exclusive, non-transferable license to copy, use, modify, create        *
+* derivative works of, and compile the Atmel Source Code and derivative       *
+* works for the sole purpose of creating custom software in support of        *
+* licensee product to be used only in conjunction with a Atmel integrated     *
+* circuit as specified in the applicable agreement. Any reproduction,         *
+* modification, translation, compilation, or representation of this           *
+* software except as specified above is prohibited without the express        *
+* written permission of Atmel.                                                *
+*                                                                             *
+* Disclaimer: ATMEL MAKES NO WARRANTY OF ANY KIND,EXPRESS OR IMPLIED,         *
+* WITH REGARD TO THIS MATERIAL, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED    *
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.         *
+* Atmel reserves the right to make changes without further notice to the      *
+* materials described herein. Atmel does not assume any liability arising     *
+* out of the application or use of any product or circuit described herein.   *
+* Atmel does not authorize its products for use as critical components in     *
+* life-support systems where a malfunction or failure may reasonably be       *
+* expected to result in significant injury to the user. The inclusion of      *
+* Atmel products in a life-support systems application implies that the       *
+* manufacturer assumes all risk of such use and in doing so indemnifies       *
+* Atmel against all charges.                                                  *
+*                                                                             *
+* Use may be limited by and subject to the applicable Atmel software          *
+* license agreement.                                                          *
+*******************************************************************************/
+/* \file timer1_asm.s90
+*/
+
+    NAME timer1_asm
+
+    PUBLIC ATA_timer1Close_ASM
+    PUBLIC ATA_timer1ResetRun_ASM
+    
+    PUBLIC ATA_timer1ComIntHandler_ASM
+    PUBLIC ATA_timer1OvfIntHandler_ASM
+
+    EXTERN timer1
+
+/* ---------------------------------------------------------------------------*/
+/*   INCLUDES                                                                 */
+/* ---------------------------------------------------------------------------*/
+#include "regs.inc"            
+#include "globals.h"
+/* ---------------------------------------------------------------------------*/
+/*   DEFINES                                                                  */
+/* ---------------------------------------------------------------------------*/
+/* ---------------------------------------------------------------------------*/
+/*   Modul Globals                                                            */
+/* ---------------------------------------------------------------------------*/
+/* ---------------------------------------------------------------------------*/
+/*   IMPLEMENTATION                                                           */
+/* ---------------------------------------------------------------------------*/
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_timer1Close_ASM</b>
+    closes timer1 and removes power from timer1 block.
+
+    \return none
+            
+    \image html ATA_timer1Close_ASM.png
+    \image rtf ATA_timer1Close_ASM.png
+    \n
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_timer1Close_ASM:
+    PUSH    R31
+    CLI
+    LDI     R31 , BM_T1RES
+    OUT     T1CR , R31
+    SEI                                 ; global IRQ enable
+    CLR     R31
+    STS     timer1 + TMR1STATE , R31    ; set timer1.status to 0x00
+    SBI     PRR1 , PRT1
+    POP     R31
+    RET
+
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_timer1ComIntHandler_ASM</b>
+    is the interrupt service routine for the compare interrupt of timer1.
+    The function stored in timer1.compIsr is called in this ISR.
+
+    \return none
+                
+    \image html ATA_timer1ComIntHandler_ASM.png
+    \image rtf ATA_timer1ComIntHandler_ASM.png
+    \n
+*/
+/* ---------------------------------------------------------------------------*/
+#pragma vector=T1COMINT_vect
+RSEG CODE:CODE:ROOT(1)
+ATA_timer1ComIntHandler_ASM:
+    PUSH    R30
+    PUSH    R31
+    IN      R30 , SREG
+    PUSH    R30
+    SBI     MCUCR , SPIIO         ; enable SPI only interrupt
+    SEI
+    
+    LDS     R30 , timer1 + 1      ; set up pointer to func
+    LDS     R31 , timer1 + 2      ; set up pointer to func
+    ICALL                         ; function call
+
+    
+    
+    POP     R30
+    OUT     SREG , R30
+    CBI     MCUCR , SPIIO         ; disable SPI only interrupt
+    POP     R31
+    POP     R30
+    RETI
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_timer1OvfIntHandler_ASM</b>
+    is the interrupt service routine for the overflow interrupt of timer1.
+    The function stored in timer1.ovfIsr is called in this ISR.
+    
+    \return none
+                
+    \image html ATA_timer1OvfIntHandler_ASM.png
+    \image rtf ATA_timer1OvfIntHandler_ASM.png
+    \n
+*/
+/* ---------------------------------------------------------------------------*/
+#pragma vector=T1OVFINT_vect
+RSEG CODE:CODE:ROOT(1)
+ATA_timer1OvfIntHandler_ASM:
+    PUSH    R30
+    PUSH    R31
+    IN      R30 , SREG
+    PUSH    R30
+    SBI     MCUCR , SPIIO          ; enable SPI only interrupt
+    SEI
+
+    LDS     R30 , timer1 + 3       ; set up pointer to func
+    LDS     R31 , timer1 + 4       ; set up pointer to func
+    ICALL                          ; function call
+
+    
+    POP     R30
+    OUT     SREG , R30
+    CBI     MCUCR , SPIIO          ; disable SPI only interrupt
+    POP     R31
+    POP     R30
+    RETI
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_timer1ResetRun_ASM</b>
+    resets the prescaler and count register of timer1 and sets Timer1 to run 
+    mode.
+    
+    \return none
+                    
+    \image html ATA_timer1ResetRun_ASM.png
+    \image rtf ATA_timer1ResetRun_ASM.png
+    \n
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_timer1ResetRun_ASM:
+    CBI     T1CR , T1ENA        ; disable Timer1                     
+CHECKT1ENABIT_1:
+    SBIC    T1CR , T1ENA        ; loop until timer is dsiabled       
+    RJMP    CHECKT1ENABIT_1
+    SBI     T1CR , T1RES        ; reset timer1                       
+    SBI     T1CR , T1ENA        ; re-enable timer1
+    RET
+    
+    END

@@ -1,0 +1,1613 @@
+/* *ASM************************************************************************
+  Use of this software is subject to Atmel's Software License Agreement.
+-------------------------------------------------------------------------------
+  $URL: http://svnservulm.corp.atmel.com/svn/CDB/Apps/Apps_SW/Trunk/SW_Projects/XC8/ATA8510_FLASH_XC8/src/firmware/api/src/api_asm.s90 $
+  $LastChangedRevision: 648718 $
+  $LastChangedDate: 2021-10-27 15:12:44 +0200 (Mi, 27 Okt 2021) $
+  $LastChangedBy: gwillbol $
+-------------------------------------------------------------------------------
+  Project:      ATA5831
+  Target MCU:   ATA5831
+  Compiler:     IAR Assembler for AVR 5.51.0
+-------------------------------------------------------------------------------
+
+******************************************************************************
+* Copyright 2011, Atmel Automotive GmbH                                       *
+*                                                                             *
+* This software is owned by the Atmel Automotive GmbH                         *
+* and is protected by and subject to worldwide patent protection.             *
+* Atmel hereby grants to licensee a personal,                                 *
+* non-exclusive, non-transferable license to copy, use, modify, create        *
+* derivative works of, and compile the Atmel Source Code and derivative       *
+* works for the sole purpose of creating custom software in support of        *
+* licensee product to be used only in conjunction with a Atmel integrated     *
+* circuit as specified in the applicable agreement. Any reproduction,         *
+* modification, translation, compilation, or representation of this           *
+* software except as specified above is prohibited without the express        *
+* written permission of Atmel.                                                *
+*                                                                             *
+* Disclaimer: ATMEL MAKES NO WARRANTY OF ANY KIND,EXPRESS OR IMPLIED,         *
+* WITH REGARD TO THIS MATERIAL, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED    *
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.         *
+* Atmel reserves the right to make changes without further notice to the      *
+* materials described herein. Atmel does not assume any liability arising     *
+* out of the application or use of any product or circuit described herein.   *
+* Atmel does not authorize its products for use as critical components in     *
+* life-support systems where a malfunction or failure may reasonably be       *
+* expected to result in significant injury to the user. The inclusion of      *
+* Atmel products in a life-support systems application implies that the       *
+* manufacturer assumes all risk of such use and in doing so indemnifies       *
+* Atmel against all charges.                                                  *
+*                                                                             *
+* Use may be limited by and subject to the applicable Atmel software          *
+* license agreement.                                                          *
+*******************************************************************************/
+/* \file api_asm.s90
+*/
+    NAME api_asm
+
+/* ===========================================================================*/
+/*   INCLUDES                                                                 */
+/* ===========================================================================*/
+;module API
+EXTERN ATA_ReadFillLevelRxBuffer_C
+EXTERN ATA_ReadFillLevelTxBuffer_C
+EXTERN ATA_ReadFillLevelRssiBuffer_C
+EXTERN ATA_GetEventBytes_C
+EXTERN ATA_ReadRssiBuffer_C
+EXTERN ATA_ReadRxBuffer_C
+EXTERN ATA_WriteSramRegisters_C
+EXTERN ATA_ReadSramRegisters_C
+EXTERN ATA_WriteEeprom_C
+EXTERN ATA_ReadEeprom_C
+EXTERN ATA_WriteTxBuffer_C
+EXTERN ATA_WriteTxPreambleBuffer_C
+EXTERN ATA_SetSystemMode_C
+EXTERN ATA_CalibrateAndCheck_C
+;--GW--SIX-- not used anymore EXTERN ATA_SystemResetRom_C
+;--GW--SIX-- not used anymore EXTERN ATA_SystemResetFlash_C
+EXTERN ATA_GetRomVersion_C
+EXTERN ATA_GetFlashVersion_C
+EXTERN ATA_CustomerConfigurableCommand_C
+EXTERN ATA_SystemReset_C
+EXTERN ATA_TriggerEepromSecureWrite_C
+EXTERN ATA_SetVoltageMonitor_C
+EXTERN ATA_OffCommand_C
+EXTERN ATA_ReadTemperature_C
+EXTERN ATA_InitSramService_C
+EXTERN ATA_StartRssiMeasurement_C
+EXTERN ATA_GetRssiAverageValue_C
+EXTERN ATA_GetRssiPeakValue_C
+; module CALIB
+EXTERN ATA_rfCalibration_C
+EXTERN ATA_anttuneStateInitSSM_C
+EXTERN ATA_sysAntTuneSsmEnable_C
+EXTERN ATA_anttuneStateStartSSM_C
+EXTERN ATA_anttuneStateWait4SSMrdy_C
+EXTERN ATA_anttuneStateSetCmdRdy_C
+EXTERN ATA_vcocalStateInitSSM_C
+EXTERN ATA_sysVcoCalSsmEnable_C
+EXTERN ATA_vcocalStateStartSSM_C
+EXTERN ATA_vcocalStateWait4SSMrdy_C
+EXTERN ATA_vcocalStateSetCmdRdy_C
+EXTERN ATA_tempmeasStateInitSSM_C
+EXTERN ATA_sysTempMeasSsmEnable_C
+EXTERN ATA_tempmeasStateStartSSM_C
+EXTERN ATA_tempmeasStateWait4SSMrdy_C
+EXTERN ATA_tempmeasStateWait4Temperature_C
+EXTERN ATA_tempmeasStateSetCmdRdy_C
+; module EEP
+EXTERN ATA_eepWRbyte_C
+EXTERN ATA_eepWRblock_C 
+EXTERN ATA_eepRDblock_C
+EXTERN ATA_eepromSecureWrite_C
+EXTERN ATA_eepRDbyte_ASM
+; module EXTIF
+EXTERN ATA_SpiOpen_C
+EXTERN ATA_initExtIf_C
+EXTERN ATA_PatchSpiReady_ASM
+EXTERN ATA_pinChangeInterrupt0Handler_ASM
+EXTERN ATA_pinChangeInterrupt1Handler_ASM
+EXTERN ATA_SpiClose_ASM
+EXTERN ATA_spiSerialTransferCompleteHandler_ASM
+EXTERN ATA_spiRxBufferHandler_ASM
+EXTERN ATA_spiTxBufferHandler_ASM
+EXTERN ATA_portBisr_ASM
+EXTERN ATA_portCisr_ASM
+EXTERN ATA_interrupt0Handler_ASM
+EXTERN ATA_interrupt1Handler_ASM
+; module globals
+EXTERN ATA_setClk_C
+EXTERN ATA_wdtDisable_C
+EXTERN ATA_wdtEnable_C
+EXTERN ATA_SleepMode_C
+EXTERN ATA_Sleep_C
+EXTERN ATA_currentServiceInit_C
+EXTERN ATA_initPollingConfiguration_C
+EXTERN ATA_initRssiConfiguration_C
+EXTERN ATA_initFacLockedArea_C
+EXTERN ATA_clkSwitchFRC_C
+EXTERN ATA_initChannelSwitchForCurrentService_C
+EXTERN ATA_clkSwitchXTO_ASM
+EXTERN ATA_copyEepSvc_ASM
+EXTERN ATA_copyEepChannel_ASM
+EXTERN ATA_copySramSvc_ASM
+EXTERN ATA_copySramChannel_ASM
+
+; module IDSCAN
+EXTERN ATA_doIdScan_C
+
+;module INIT
+EXTERN ATA_initIoConfig_C
+EXTERN ATA_defaultIoConfig_C
+EXTERN ATA_systemInit_C
+EXTERN ATA_doInitialization_C
+EXTERN ATA_checkWakeupSource_C
+EXTERN ATA_systemCalibAtStartup_C
+
+; module RF
+EXTERN ATA_startInitTxRxSSM_C
+EXTERN ATA_startShutDownSSM_C
+EXTERN ATA_ssmInterrupt_C
+EXTERN ATA_IDscanBufferFullInterrupt_C
+EXTERN ATA_resetSSMs_C
+EXTERN ATA_switchIdleXTO_ASM
+EXTERN ATA_setRxActive_ASM
+EXTERN ATA_clrRxActive_ASM
+EXTERN ATA_setSystemError_ASM
+EXTERN ATA_dataFifoOverUnderFlowHandler_ASM
+EXTERN ATA_rssiPreambleFifoOverUnderFlowHandler_ASM
+
+; module RFPOLLING
+EXTERN ATA_pollStateInitCurrentPollingChannel_C
+EXTERN ATA_pollStateInitSSM_C
+EXTERN ATA_pollStateWait4SSMstateGetTelegram_C
+EXTERN ATA_pollStateWait4ShutdownRdyTRX_C
+EXTERN ATA_pollStateCheck4NextPollingChannel_C
+EXTERN ATA_pollStateISR_ASM
+
+; module RFRX
+EXTERN ATA_rxStateInitSSM_C
+EXTERN ATA_rxStateStartSSM_C
+EXTERN ATA_rxStateWait4SSMstateGetTelegram_C
+EXTERN ATA_rxStateWait4SSMrdy_C
+EXTERN ATA_pureRxUp_C
+EXTERN ATA_rssiStateInitSSM_C
+EXTERN ATA_rssiStateWait4SSMrdy_C
+EXTERN ATA_rssiStateStartSSM_C
+EXTERN ATA_rxStateInitSubchanneling_C
+EXTERN ATA_rxStateSubchanneling_Center_Freq_C
+EXTERN ATA_rxStateSubchanneling_Lower_Freq_C
+EXTERN ATA_rxStateSubchanneling_Upper_Freq_C
+EXTERN ATA_wakeCheckOkPathB_ASM
+EXTERN ATA_wakeCheckOkPathA_ASM
+EXTERN ATA_startOfTelegramPathB_ASM
+EXTERN ATA_startOfTelegramPathA_ASM
+EXTERN ATA_endOfTelegramPathB_ASM
+EXTERN ATA_endOfTelegramPathA_ASM
+EXTERN ATA_dataFifoFillLevelReached_ASM
+EXTERN ATA_rssiPreambleFifoFillLevelReached_ASM
+; module RFTX
+EXTERN ATA_txStateInitSSM_C
+EXTERN ATA_txStateStartSSM_C
+EXTERN ATA_txStateWait4SSMrdy_C
+EXTERN ATA_txTransparentStateWait4SSMrdy_C
+EXTERN ATA_txStateTransparentMode_C
+EXTERN ATA_txStateWait4FillLevel_C
+EXTERN ATA_txStateStartTxModulator_C
+EXTERN ATA_txStateStartWait4TransmissionComplete_C
+EXTERN ATA_openTimer3forTxing_C
+EXTERN ATA_sysTxingBufferedMode_C
+EXTERN ATA_sysTxingTransparentMode_C
+EXTERN ATA_TxModulatorTelegramFinish_ASM
+; module SYSTEM
+EXTERN ATA_check4extRequests_C
+EXTERN ATA_serviceInitSwitching_C
+EXTERN ATA_systemFlowCtrl_C
+EXTERN ATA_sysExeStateMachineFunc_C
+EXTERN ATA_setIdleMode_C
+EXTERN ATA_systemFlowStateWaitXtoReady_C
+EXTERN ATA_systemStartSSM_C
+EXTERN ATA_systemWait4SSMrdy_C
+EXTERN ATA_systemFlowStateShutdownTRX_C
+EXTERN ATA_systemFlowStateWait4ShutdownRdyTRX_C
+EXTERN ATA_systemFlowStateMachineEnd_C
+EXTERN ATA_systemErrorLoop_C
+EXTERN ATA_lowBatt_C
+EXTERN ATA_avccLow_C
+EXTERN ATA_avccReset_C
+EXTERN ATA_triggerSrcCalibration_C
+EXTERN ATA_triggerFrcCalibration_C
+EXTERN ATA_triggerSelfCheck_C
+EXTERN ATA_wait4avcc_C
+EXTERN ATA_systemModeSwitching_C
+EXTERN ATA_tuneCheckSwitching_C
+EXTERN ATA_miscTriggerSwitching_C
+EXTERN ATA_setEventPin_ASM
+
+; module TIMER1
+EXTERN ATA_timer1Open_C
+EXTERN ATA_timer1Close_ASM
+EXTERN ATA_timer1ComIntHandler_ASM
+EXTERN ATA_timer1OvfIntHandler_ASM
+
+; module TIMER2
+EXTERN ATA_timer2Open_C
+EXTERN ATA_timer2Close_ASM
+EXTERN ATA_timer2ComIntHandler_ASM
+EXTERN ATA_timer2OvfIntHandler_ASM
+
+; module TIMER3
+EXTERN ATA_timer3Open_C
+EXTERN ATA_timer3Close_ASM
+EXTERN ATA_timer3ComIntHandler_ASM
+EXTERN ATA_timer3OvfIntHandler_ASM
+EXTERN ATA_timer3CapIntHandler_ASM
+
+; module TIMER4
+EXTERN ATA_timer4Open_C
+EXTERN ATA_timer4Close_ASM
+EXTERN ATA_timer4ComIntHandler_ASM
+EXTERN ATA_timer4OvfIntHandler_ASM
+EXTERN ATA_timer4CapIntHandler_ASM
+
+; module TIMER5
+EXTERN ATA_timer5Open_C
+EXTERN ATA_timer5Close_ASM
+EXTERN ATA_timer5ComIntHandler_ASM
+EXTERN ATA_timer5OvfIntHandler_ASM
+
+; --SIX-3375--
+EXTERN ATA_stopSsmWatchdog_C
+EXTERN ATA_timer1ResetRun_ASM
+; --SIX-3375--
+/* ===========================================================================*/
+/*   Modul Globals                                                            */
+/* ===========================================================================*/
+; module API
+PUBLIC API_ReadFillLevelRxBuffer_C
+PUBLIC API_ReadFillLevelTxBuffer_C
+PUBLIC API_ReadFillLevelRssiBuffer_C
+PUBLIC API_GetEventBytes_C
+PUBLIC API_ReadRssiBuffer_C
+PUBLIC API_ReadRxBuffer_C
+PUBLIC API_WriteSramRegisters_C
+PUBLIC API_ReadSramRegisters_C
+PUBLIC API_WriteEeprom_C
+PUBLIC API_ReadEeprom_C
+PUBLIC API_WriteTxBuffer_C
+PUBLIC API_WriteTxPreambleBuffer_C
+PUBLIC API_SetSystemMode_C
+PUBLIC API_CalibrateAndCheck_C
+;--GW--SIX-- not used anymore PUBLIC API_SystemResetRom_C
+;--GW--SIX-- not used anymore PUBLIC API_SystemResetFlash_C
+PUBLIC API_GetRomVersion_C
+PUBLIC API_GetFlashVersion_C
+PUBLIC API_CustomerConfigurableCommand_C
+PUBLIC API_SystemReset_C
+PUBLIC API_TriggerEepromSecureWrite_C
+PUBLIC API_SetVoltageMonitor_C
+PUBLIC API_OffCommand_C
+PUBLIC API_ReadTemperature_C
+PUBLIC API_InitSramService_C
+PUBLIC API_StartRssiMeasurement_C
+PUBLIC API_GetRssiAverageValue_C
+PUBLIC API_GetRssiPeakValue_C
+
+; module CALIB
+PUBLIC API_rfCalibration_C
+PUBLIC API_anttuneStateInitSSM_C
+PUBLIC API_sysAntTuneSsmEnable_C
+PUBLIC API_anttuneStateStartSSM_C
+PUBLIC API_anttuneStateWait4SSMrdy_C
+PUBLIC API_anttuneStateSetCmdRdy_C
+PUBLIC API_vcocalStateInitSSM_C
+PUBLIC API_sysVcoCalSsmEnable_C
+PUBLIC API_vcocalStateStartSSM_C
+PUBLIC API_vcocalStateWait4SSMrdy_C
+PUBLIC API_vcocalStateSetCmdRdy_C
+PUBLIC API_tempmeasStateInitSSM_C
+PUBLIC API_sysTempMeasSsmEnable_C
+PUBLIC API_tempmeasStateStartSSM_C
+PUBLIC API_tempmeasStateWait4SSMrdy_C
+PUBLIC API_tempmeasStateWait4Temperature_C
+PUBLIC API_tempmeasStateSetCmdRdy_C
+
+; module EEP
+PUBLIC API_eepWRbyte_C
+PUBLIC API_eepWRblock_C 
+PUBLIC API_eepRDblock_C
+PUBLIC API_eepromSecureWrite_C
+PUBLIC API_eepRDbyte_ASM
+
+; module EXTIF
+PUBLIC API_SpiOpen_C
+PUBLIC API_initExtIf_C
+PUBLIC API_PatchSpiReady_ASM
+PUBLIC API_pinChangeInterrupt0Handler_ASM
+PUBLIC API_pinChangeInterrupt1Handler_ASM
+PUBLIC API_SpiClose_ASM
+PUBLIC API_spiSerialTransferCompleteHandler_ASM
+PUBLIC API_spiRxBufferHandler_ASM
+PUBLIC API_spiTxBufferHandler_ASM
+PUBLIC API_portBisr_ASM
+PUBLIC API_portCisr_ASM
+PUBLIC API_interrupt0Handler_ASM
+PUBLIC API_interrupt1Handler_ASM
+
+; module GLOBALS
+PUBLIC API_setClk_C
+PUBLIC API_wdtDisable_C
+PUBLIC API_wdtEnable_C
+PUBLIC API_SleepMode_C
+PUBLIC API_Sleep_C
+PUBLIC API_currentServiceInit_C
+PUBLIC API_initPollingConfiguration_C
+PUBLIC API_initRssiConfiguration_C
+PUBLIC API_initFacLockedArea_C
+PUBLIC API_clkSwitchFRC_C
+PUBLIC API_initChannelSwitchForCurrentService_C
+PUBLIC API_clkSwitchXTO_ASM
+PUBLIC API_copyEepSvc_ASM
+PUBLIC API_copyEepChannel_ASM
+PUBLIC API_copySramSvc_ASM
+PUBLIC API_copySramChannel_ASM
+
+; module IDSCAN
+PUBLIC API_doIdScan_C
+
+;module INIT
+PUBLIC API_initIoConfig_C
+PUBLIC API_defaultIoConfig_C
+PUBLIC API_systemInit_C
+PUBLIC API_doInitialization_C
+PUBLIC API_checkWakeupSource_C
+PUBLIC API_systemCalibAtStartup_C
+
+; module RF
+PUBLIC API_startInitTxRxSSM_C
+PUBLIC API_startShutDownSSM_C
+PUBLIC API_ssmInterrupt_C
+PUBLIC API_IDscanBufferFullInterrupt_C
+PUBLIC API_resetSSMs_C
+PUBLIC API_switchIdleXTO_ASM
+PUBLIC API_setRxActive_ASM
+PUBLIC API_clrRxActive_ASM
+PUBLIC API_setSystemError_ASM
+PUBLIC API_dataFifoOverUnderFlowHandler_ASM
+PUBLIC API_rssiPreambleFifoOverUnderFlowHandler_ASM
+
+; module RFPOLLING
+PUBLIC API_pollStateInitCurrentPollingChannel_C
+PUBLIC API_pollStateInitSSM_C
+PUBLIC API_pollStateWait4SSMstateGetTelegram_C
+PUBLIC API_pollStateWait4ShutdownRdyTRX_C
+PUBLIC API_pollStateCheck4NextPollingChannel_C
+PUBLIC API_pollStateISR_ASM
+
+; module RFRX
+PUBLIC API_rxStateInitSSM_C
+PUBLIC API_rxStateStartSSM_C
+PUBLIC API_rxStateWait4SSMstateGetTelegram_C
+PUBLIC API_rxStateWait4SSMrdy_C
+PUBLIC API_pureRxUp_C
+PUBLIC API_rssiStateInitSSM_C
+PUBLIC API_rssiStateWait4SSMrdy_C
+PUBLIC API_rssiStateStartSSM_C
+PUBLIC API_rxStateInitSubchanneling_C
+PUBLIC API_rxStateSubchanneling_Center_Freq_C
+PUBLIC API_rxStateSubchanneling_Lower_Freq_C
+PUBLIC API_rxStateSubchanneling_Upper_Freq_C
+PUBLIC API_wakeCheckOkPathB_ASM
+PUBLIC API_wakeCheckOkPathA_ASM
+PUBLIC API_startOfTelegramPathB_ASM
+PUBLIC API_startOfTelegramPathA_ASM
+PUBLIC API_endOfTelegramPathB_ASM
+PUBLIC API_endOfTelegramPathA_ASM
+PUBLIC API_dataFifoFillLevelReached_ASM
+PUBLIC API_rssiPreambleFifoFillLevelReached_ASM
+
+; module RFTX
+PUBLIC API_txStateInitSSM_C
+PUBLIC API_txStateStartSSM_C
+PUBLIC API_txStateWait4SSMrdy_C
+PUBLIC API_txTransparentStateWait4SSMrdy_C
+PUBLIC API_txStateTransparentMode_C
+PUBLIC API_txStateWait4FillLevel_C
+PUBLIC API_txStateStartTxModulator_C
+PUBLIC API_txStateStartWait4TransmissionComplete_C
+PUBLIC API_openTimer3forTxing_C
+PUBLIC API_sysTxingBufferedMode_C
+PUBLIC API_sysTxingTransparentMode_C
+PUBLIC API_TxModulatorTelegramFinish_ASM
+; module SYSTEM
+PUBLIC API_check4extRequests_C
+PUBLIC API_serviceInitSwitching_C
+PUBLIC API_systemFlowCtrl_C
+PUBLIC API_sysExeStateMachineFunc_C
+PUBLIC API_setIdleMode_C
+PUBLIC API_systemFlowStateWaitXtoReady_C
+PUBLIC API_systemStartSSM_C
+PUBLIC API_systemWait4SSMrdy_C
+PUBLIC API_systemFlowStateShutdownTRX_C
+PUBLIC API_systemFlowStateWait4ShutdownRdyTRX_C
+PUBLIC API_systemFlowStateMachineEnd_C
+PUBLIC API_systemErrorLoop_C
+PUBLIC API_lowBatt_C
+PUBLIC API_avccLow_C
+PUBLIC API_avccReset_C
+PUBLIC API_triggerSrcCalibration_C
+PUBLIC API_triggerFrcCalibration_C
+PUBLIC API_triggerSelfCheck_C
+PUBLIC API_wait4avcc_C
+PUBLIC API_systemModeSwitching_C
+PUBLIC API_tuneCheckSwitching_C
+PUBLIC API_miscTriggerSwitching_C
+PUBLIC API_setEventPin_ASM
+
+; module TIMER1
+PUBLIC API_timer1Open_C
+PUBLIC API_timer1Close_ASM
+PUBLIC API_timer1ComIntHandler_ASM
+PUBLIC API_timer1OvfIntHandler_ASM
+
+; module TIMER2
+PUBLIC API_timer2Open_C
+PUBLIC API_timer2Close_ASM
+PUBLIC API_timer2ComIntHandler_ASM
+PUBLIC API_timer2OvfIntHandler_ASM
+
+; module TIMER3
+PUBLIC API_timer3Open_C
+PUBLIC API_timer3Close_ASM
+PUBLIC API_timer3ComIntHandler_ASM
+PUBLIC API_timer3OvfIntHandler_ASM
+PUBLIC API_timer3CapIntHandler_ASM
+
+; module TIMER4
+PUBLIC API_timer4Open_C
+PUBLIC API_timer4Close_ASM
+PUBLIC API_timer4ComIntHandler_ASM
+PUBLIC API_timer4OvfIntHandler_ASM
+PUBLIC API_timer4CapIntHandler_ASM
+
+; module TIMER5
+PUBLIC API_timer5Open_C
+PUBLIC API_timer5Close_ASM
+PUBLIC API_timer5ComIntHandler_ASM
+PUBLIC API_timer5OvfIntHandler_ASM
+
+; --SIX-3375--
+PUBLIC API_stopSsmWatchdog_C
+PUBLIC API_timer1ResetRun_ASM
+; --SIX-3375--
+
+/* ===========================================================================*/
+/*   Macros                                                                   */
+/* ===========================================================================*/
+/* ===========================================================================*/
+/*   IMPLEMENTATION                                                           */
+/* ===========================================================================*/
+    COMMON APITAB_ROM12:CODE:ROOT(1)
+    ORG 0
+; module API
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_ReadFillLevelRxBuffer_C</b>
+    \sa ATA_ReadFillLevelRxBuffer_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_ReadFillLevelRxBuffer_C:                JMP     ATA_ReadFillLevelRxBuffer_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_ReadFillLevelTxBuffer_C</b>
+    \sa ATA_ReadFillLevelTxBuffer_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_ReadFillLevelTxBuffer_C:                JMP     ATA_ReadFillLevelTxBuffer_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_ReadFillLevelRssiBuffer_C</b>
+    \sa ATA_ReadFillLevelRssiBuffer_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_ReadFillLevelRssiBuffer_C:              JMP     ATA_ReadFillLevelRssiBuffer_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_GetEventBytes_C</b>
+    \sa ATA_GetEventBytes_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_GetEventBytes_C:                        JMP     ATA_GetEventBytes_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_ReadRssiBuffer_C</b>
+    \sa ATA_ReadRssiBuffer_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_ReadRssiBuffer_C:                       JMP     ATA_ReadRssiBuffer_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_ReadRxBuffer_C</b>
+    \sa ATA_ReadRxBuffer_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_ReadRxBuffer_C:                         JMP     ATA_ReadRxBuffer_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_WriteSramRegisters_C</b>
+    \sa ATA_WriteSramRegisters_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_WriteSramRegisters_C:                   JMP     ATA_WriteSramRegisters_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_ReadSramRegisters_C</b>
+    \sa ATA_ReadSramRegisters_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_ReadSramRegisters_C:                    JMP     ATA_ReadSramRegisters_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_WriteEeprom_C</b>
+    \sa ATA_WriteEeprom_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_WriteEeprom_C:                          JMP     ATA_WriteEeprom_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_ReadEeprom_C</b>
+    \sa ATA_ReadEeprom_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_ReadEeprom_C:                           JMP     ATA_ReadEeprom_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_WriteTxBuffer_C</b>
+    \sa ATA_WriteTxBuffer_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_WriteTxBuffer_C:                        JMP     ATA_WriteTxBuffer_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_WriteTxPreambleBuffer_C</b>
+    \sa ATA_WriteTxPreambleBuffer_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_WriteTxPreambleBuffer_C:                JMP     ATA_WriteTxPreambleBuffer_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_SetSystemMode_C</b>
+    \sa ATA_SetSystemMode_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_SetSystemMode_C:                        JMP     ATA_SetSystemMode_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_CalibrateAndCheck_C</b>
+    \sa ATA_CalibrateAndCheck_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_CalibrateAndCheck_C:                    JMP     ATA_CalibrateAndCheck_C
+; --GW--SIX-- not used anymore API_SystemResetRom_C:                       JMP     ATA_SystemResetRom_C
+; --GW--SIX-- not used anymore API_SystemResetFlash_C:                     JMP     ATA_SystemResetFlash_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_GetRomVersion_C</b>
+    \sa ATA_GetRomVersion_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_GetRomVersion_C:                        JMP     ATA_GetRomVersion_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_GetFlashVersion_C</b>
+    \sa ATA_GetFlashVersion_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_GetFlashVersion_C:                      JMP     ATA_GetFlashVersion_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_CustomerConfigurableCommand_C</b>
+    \sa ATA_CustomerConfigurableCommand_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_CustomerConfigurableCommand_C:          JMP     ATA_CustomerConfigurableCommand_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_SystemReset_C</b>
+    \sa ATA_SystemReset_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_SystemReset_C:                          JMP     ATA_SystemReset_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_TriggerEepromSecureWrite_C</b>
+    \sa ATA_TriggerEepromSecureWrite_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_TriggerEepromSecureWrite_C:             JMP     ATA_TriggerEepromSecureWrite_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_SetVoltageMonitor_C</b>
+    \sa ATA_SetVoltageMonitor_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_SetVoltageMonitor_C:                    JMP     ATA_SetVoltageMonitor_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_OffCommand_C</b>
+    \sa ATA_OffCommand_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_OffCommand_C:                           JMP     ATA_OffCommand_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_ReadTemperature_C</b>
+    \sa ATA_ReadTemperature_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_ReadTemperature_C:                      JMP     ATA_ReadTemperature_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_InitSramService_C</b>
+    \sa ATA_InitSramService_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_InitSramService_C:                      JMP     ATA_InitSramService_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_StartRssiMeasurement_C</b>
+    \sa ATA_StartRssiMeasurement_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_StartRssiMeasurement_C:                 JMP     ATA_StartRssiMeasurement_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_GetRssiAverageValue_C</b>
+    \sa ATA_GetRssiAverageValue_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_GetRssiAverageValue_C:                  JMP     ATA_GetRssiAverageValue_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_GetRssiPeakValue_C</b>
+    \sa ATA_GetRssiPeakValue_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_GetRssiPeakValue_C:                     JMP     ATA_GetRssiPeakValue_C
+
+; module CALIB
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rfCalibration_C</b>
+    \sa ATA_rfCalibration_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_rfCalibration_C:                        JMP     ATA_rfCalibration_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_anttuneStateInitSSM_C</b>
+    \sa ATA_anttuneStateInitSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_anttuneStateInitSSM_C:                  JMP     ATA_anttuneStateInitSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_sysAntTuneSsmEnable_C</b>
+    \sa ATA_sysAntTuneSsmEnable_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_sysAntTuneSsmEnable_C:                  JMP     ATA_sysAntTuneSsmEnable_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_anttuneStateStartSSM_C</b>
+    \sa ATA_anttuneStateStartSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_anttuneStateStartSSM_C:                 JMP     ATA_anttuneStateStartSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_anttuneStateWait4SSMrdy_C</b>
+    \sa ATA_anttuneStateWait4SSMrdy_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_anttuneStateWait4SSMrdy_C:              JMP     ATA_anttuneStateWait4SSMrdy_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_anttuneStateSetCmdRdy_C</b>
+    \sa ATA_anttuneStateSetCmdRdy_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_anttuneStateSetCmdRdy_C:                JMP     ATA_anttuneStateSetCmdRdy_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_vcocalStateInitSSM_C</b>
+    \sa ATA_vcocalStateInitSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_vcocalStateInitSSM_C:                   JMP     ATA_vcocalStateInitSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_sysVcoCalSsmEnable_C</b>
+    \sa ATA_sysVcoCalSsmEnable_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_sysVcoCalSsmEnable_C:                   JMP     ATA_sysVcoCalSsmEnable_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_vcocalStateStartSSM_C</b>
+    \sa ATA_vcocalStateStartSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_vcocalStateStartSSM_C:                  JMP     ATA_vcocalStateStartSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_vcocalStateWait4SSMrdy_C</b>
+    \sa ATA_vcocalStateWait4SSMrdy_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_vcocalStateWait4SSMrdy_C:               JMP     ATA_vcocalStateWait4SSMrdy_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_vcocalStateSetCmdRdy_C</b>
+    \sa ATA_vcocalStateSetCmdRdy_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_vcocalStateSetCmdRdy_C:                 JMP     ATA_vcocalStateSetCmdRdy_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_tempmeasStateInitSSM_C</b>
+    \sa ATA_tempmeasStateInitSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_tempmeasStateInitSSM_C:                 JMP     ATA_tempmeasStateInitSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_sysTempMeasSsmEnable_C</b>
+    \sa ATA_sysTempMeasSsmEnable_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_sysTempMeasSsmEnable_C:                 JMP     ATA_sysTempMeasSsmEnable_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_tempmeasStateStartSSM_C</b>
+    \sa ATA_tempmeasStateStartSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_tempmeasStateStartSSM_C:                JMP     ATA_tempmeasStateStartSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_tempmeasStateWait4SSMrdy_C</b>
+    \sa ATA_tempmeasStateWait4SSMrdy_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_tempmeasStateWait4SSMrdy_C:             JMP     ATA_tempmeasStateWait4SSMrdy_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_tempmeasStateWait4Temperature_C</b>
+    \sa ATA_tempmeasStateWait4Temperature_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_tempmeasStateWait4Temperature_C:        JMP     ATA_tempmeasStateWait4Temperature_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_tempmeasStateSetCmdRdy_C</b>
+    \sa ATA_tempmeasStateSetCmdRdy_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_tempmeasStateSetCmdRdy_C:               JMP     ATA_tempmeasStateSetCmdRdy_C
+
+; module EEP
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_eepWRbyte_C</b>
+    \sa ATA_eepWRbyte_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_eepWRbyte_C:                            JMP     ATA_eepWRbyte_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_eepWRblock_C</b>
+    \sa ATA_eepWRblock_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_eepWRblock_C:                           JMP     ATA_eepWRblock_C 
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_eepRDblock_C</b>
+    \sa ATA_eepRDblock_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_eepRDblock_C:                           JMP     ATA_eepRDblock_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_eepromSecureWrite_C</b>
+    \sa ATA_eepromSecureWrite_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_eepromSecureWrite_C:                    JMP     ATA_eepromSecureWrite_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_eepRDbyte_ASM</b>
+    \sa ATA_eepRDbyte_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_eepRDbyte_ASM:                          JMP     ATA_eepRDbyte_ASM
+
+; module EXTIF
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_SpiOpen_C</b>
+    \sa ATA_SpiOpen_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_SpiOpen_C:                              JMP     ATA_SpiOpen_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_initExtIf_C</b>
+    \sa ATA_initExtIf_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_initExtIf_C:                            JMP     ATA_initExtIf_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_PatchSpiReady_ASM</b>
+    \sa ATA_PatchSpiReady_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_PatchSpiReady_ASM:                      JMP     ATA_PatchSpiReady_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_pinChangeInterrupt0Handler_ASM</b>
+    \sa ATA_pinChangeInterrupt0Handler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_pinChangeInterrupt0Handler_ASM:         JMP     ATA_pinChangeInterrupt0Handler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_pinChangeInterrupt1Handler_ASM</b>
+    \sa ATA_pinChangeInterrupt1Handler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_pinChangeInterrupt1Handler_ASM:         JMP     ATA_pinChangeInterrupt1Handler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_SpiClose_ASM</b>
+    \sa ATA_SpiClose_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_SpiClose_ASM:                           JMP     ATA_SpiClose_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_spiSerialTransferCompleteHandler_ASM</b>
+    \sa ATA_spiSerialTransferCompleteHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_spiSerialTransferCompleteHandler_ASM:   JMP     ATA_spiSerialTransferCompleteHandler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_spiRxBufferHandler_ASM</b>
+    \sa ATA_spiRxBufferHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_spiRxBufferHandler_ASM:                 JMP     ATA_spiRxBufferHandler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_spiTxBufferHandler_ASM</b>
+    \sa ATA_spiTxBufferHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_spiTxBufferHandler_ASM:                 JMP     ATA_spiTxBufferHandler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_portBisr_ASM</b>
+    \sa ATA_portBisr_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_portBisr_ASM:                           JMP     ATA_portBisr_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_portCisr_ASM</b>
+    \sa ATA_portCisr_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_portCisr_ASM:                           JMP     ATA_portCisr_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_interrupt0Handler_ASM</b>
+    \sa ATA_interrupt0Handler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_interrupt0Handler_ASM:                  JMP     ATA_interrupt0Handler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_interrupt1Handler_ASM</b>
+    \sa ATA_interrupt1Handler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_interrupt1Handler_ASM:                  JMP     ATA_interrupt1Handler_ASM
+
+; module GLOBALS
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_setClk_C</b>
+    \sa ATA_setClk_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_setClk_C:                               JMP     ATA_setClk_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_wdtDisable_C</b>
+    \sa ATA_wdtDisable_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_wdtDisable_C:                           JMP     ATA_wdtDisable_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_wdtEnable_C</b>
+    \sa ATA_wdtEnable_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_wdtEnable_C:                            JMP     ATA_wdtEnable_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_SleepMode_C</b>
+    \sa ATA_SleepMode_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_SleepMode_C:                            JMP     ATA_SleepMode_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_Sleep_C</b>
+    \sa ATA_Sleep_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_Sleep_C:                                JMP     ATA_Sleep_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_currentServiceInit_C</b>
+    \sa ATA_currentServiceInit_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_currentServiceInit_C:                   JMP     ATA_currentServiceInit_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_initPollingConfiguration_C</b>
+    \sa ATA_initPollingConfiguration_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_initPollingConfiguration_C:             JMP     ATA_initPollingConfiguration_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_initRssiConfiguration_C</b>
+    \sa ATA_initRssiConfiguration_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_initRssiConfiguration_C:                JMP     ATA_initRssiConfiguration_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_initFacLockedArea_C</b>
+    \sa ATA_initFacLockedArea_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_initFacLockedArea_C:                    JMP     ATA_initFacLockedArea_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_clkSwitchFRC_C</b>
+    \sa ATA_clkSwitchFRC_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_clkSwitchFRC_C:                         JMP     ATA_clkSwitchFRC_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_initChannelSwitchForCurrentService_C</b>
+    \sa ATA_initChannelSwitchForCurrentService_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_initChannelSwitchForCurrentService_C:   JMP     ATA_initChannelSwitchForCurrentService_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_clkSwitchXTO_ASM</b>
+    \sa ATA_clkSwitchXTO_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_clkSwitchXTO_ASM:                       JMP     ATA_clkSwitchXTO_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_copyEepSvc_ASM</b>
+    \sa ATA_copyEepSvc_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_copyEepSvc_ASM:                         JMP     ATA_copyEepSvc_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_copyEepChannel_ASM</b>
+    \sa ATA_copyEepChannel_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_copyEepChannel_ASM:                     JMP     ATA_copyEepChannel_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_copySramSvc_ASM</b>
+    \sa ATA_copySramSvc_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_copySramSvc_ASM:                        JMP     ATA_copySramSvc_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_copySramChannel_ASM</b>
+    \sa ATA_copySramChannel_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_copySramChannel_ASM:                    JMP     ATA_copySramChannel_ASM
+
+; module IDSCAN
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_doIdScan_C</b>
+    \sa ATA_doIdScan_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_doIdScan_C:                             JMP     ATA_doIdScan_C
+
+;module INIT
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_initIoConfig_C</b>
+    \sa ATA_initIoConfig_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_initIoConfig_C:                         JMP     ATA_initIoConfig_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_defaultIoConfig_C</b>
+    \sa ATA_defaultIoConfig_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_defaultIoConfig_C:                      JMP     ATA_defaultIoConfig_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_systemInit_C</b>
+    \sa ATA_systemInit_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_systemInit_C:                           JMP     ATA_systemInit_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_doInitialization_C</b>
+    \sa ATA_doInitialization_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_doInitialization_C:                     JMP     ATA_doInitialization_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_checkWakeupSource_C</b>
+    \sa ATA_checkWakeupSource_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_checkWakeupSource_C:                    JMP     ATA_checkWakeupSource_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_systemCalibAtStartup_C</b>
+    \sa ATA_systemCalibAtStartup_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_systemCalibAtStartup_C:                 JMP     ATA_systemCalibAtStartup_C
+
+; module RF
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_startInitTxRxSSM_C</b>
+    \sa ATA_startInitTxRxSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_startInitTxRxSSM_C:                         JMP     ATA_startInitTxRxSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_startShutDownSSM_C</b>
+    \sa ATA_startShutDownSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_startShutDownSSM_C:                         JMP     ATA_startShutDownSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_ssmInterrupt_C</b>
+    \sa ATA_ssmInterrupt_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_ssmInterrupt_C:                             JMP     ATA_ssmInterrupt_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_IDscanBufferFullInterrupt_C</b>
+    \sa ATA_IDscanBufferFullInterrupt_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_IDscanBufferFullInterrupt_C:                JMP     ATA_IDscanBufferFullInterrupt_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_resetSSMs_C</b>
+    \sa ATA_resetSSMs_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_resetSSMs_C:                                JMP     ATA_resetSSMs_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_switchIdleXTO_ASM</b>
+    \sa ATA_switchIdleXTO_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_switchIdleXTO_ASM:                          JMP     ATA_switchIdleXTO_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_setRxActive_ASM</b>
+    \sa ATA_setRxActive_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_setRxActive_ASM:                            JMP     ATA_setRxActive_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_clrRxActive_ASM</b>
+    \sa ATA_clrRxActive_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_clrRxActive_ASM:                            JMP     ATA_clrRxActive_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_setSystemError_ASM</b>
+    \sa ATA_setSystemError_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_setSystemError_ASM:                         JMP     ATA_setSystemError_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_dataFifoOverUnderFlowHandler_ASM</b>
+    \sa ATA_dataFifoOverUnderFlowHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_dataFifoOverUnderFlowHandler_ASM:           JMP     ATA_dataFifoOverUnderFlowHandler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rssiPreambleFifoOverUnderFlowHandler_ASM</b>
+    \sa ATA_rssiPreambleFifoOverUnderFlowHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_rssiPreambleFifoOverUnderFlowHandler_ASM:   JMP     ATA_rssiPreambleFifoOverUnderFlowHandler_ASM
+
+; module RFPOLLING
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_pollStateInitCurrentPollingChannel_C</b>
+    \sa ATA_pollStateInitCurrentPollingChannel_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_pollStateInitCurrentPollingChannel_C:       JMP     ATA_pollStateInitCurrentPollingChannel_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_pollStateInitSSM_C</b>
+    \sa ATA_pollStateInitSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_pollStateInitSSM_C:                         JMP     ATA_pollStateInitSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_pollStateWait4SSMstateGetTelegram_C</b>
+    \sa ATA_pollStateWait4SSMstateGetTelegram_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_pollStateWait4SSMstateGetTelegram_C:        JMP     ATA_pollStateWait4SSMstateGetTelegram_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_pollStateWait4ShutdownRdyTRX_C</b>
+    \sa ATA_pollStateWait4ShutdownRdyTRX_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_pollStateWait4ShutdownRdyTRX_C:             JMP     ATA_pollStateWait4ShutdownRdyTRX_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_pollStateCheck4NextPollingChannel_C</b>
+    \sa ATA_pollStateCheck4NextPollingChannel_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_pollStateCheck4NextPollingChannel_C:        JMP     ATA_pollStateCheck4NextPollingChannel_C    
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_pollStateISR_ASM</b>
+    \sa ATA_pollStateISR_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_pollStateISR_ASM:                           JMP     ATA_pollStateISR_ASM
+
+; module RFRX
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rxStateInitSSM_C</b>
+    \sa ATA_rxStateInitSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_rxStateInitSSM_C:                           JMP     ATA_rxStateInitSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rxStateStartSSM_C</b>
+    \sa ATA_rxStateStartSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_rxStateStartSSM_C:                          JMP     ATA_rxStateStartSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rxStateWait4SSMstateGetTelegram_C</b>
+    \sa ATA_rxStateWait4SSMstateGetTelegram_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_rxStateWait4SSMstateGetTelegram_C:          JMP     ATA_rxStateWait4SSMstateGetTelegram_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rxStateWait4SSMrdy_C</b>
+    \sa ATA_rxStateWait4SSMrdy_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_rxStateWait4SSMrdy_C:                       JMP     ATA_rxStateWait4SSMrdy_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_pureRxUp_C</b>
+    \sa ATA_pureRxUp_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_pureRxUp_C:                                 JMP     ATA_pureRxUp_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rssiStateInitSSM_C</b>
+    \sa ATA_rssiStateInitSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_rssiStateInitSSM_C:                         JMP     ATA_rssiStateInitSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rssiStateWait4SSMrdy_C</b>
+    \sa ATA_rssiStateWait4SSMrdy_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_rssiStateWait4SSMrdy_C:                     JMP     ATA_rssiStateWait4SSMrdy_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rssiStateStartSSM_C</b>
+    \sa ATA_rssiStateStartSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_rssiStateStartSSM_C:                        JMP     ATA_rssiStateStartSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rxStateInitSubchanneling_C</b>
+    \sa ATA_rxStateInitSubchanneling_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_rxStateInitSubchanneling_C:                 JMP     ATA_rxStateInitSubchanneling_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rxStateSubchanneling_Center_Freq_C</b>
+    \sa ATA_rxStateSubchanneling_Center_Freq_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_rxStateSubchanneling_Center_Freq_C:         JMP     ATA_rxStateSubchanneling_Center_Freq_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rxStateSubchanneling_Lower_Freq_C</b>
+    \sa ATA_rxStateSubchanneling_Lower_Freq_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_rxStateSubchanneling_Lower_Freq_C:          JMP     ATA_rxStateSubchanneling_Lower_Freq_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rxStateSubchanneling_Upper_Freq_C</b>
+    \sa ATA_rxStateSubchanneling_Upper_Freq_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_rxStateSubchanneling_Upper_Freq_C:          JMP     ATA_rxStateSubchanneling_Upper_Freq_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_wakeCheckOkPathB_ASM</b>
+    \sa ATA_wakeCheckOkPathB_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_wakeCheckOkPathB_ASM:                       JMP     ATA_wakeCheckOkPathB_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_wakeCheckOkPathA_ASM</b>
+    \sa ATA_wakeCheckOkPathA_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_wakeCheckOkPathA_ASM:                       JMP     ATA_wakeCheckOkPathA_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_startOfTelegramPathB_ASM</b>
+    \sa ATA_startOfTelegramPathB_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_startOfTelegramPathB_ASM:                   JMP     ATA_startOfTelegramPathB_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_startOfTelegramPathA_ASM</b>
+    \sa ATA_startOfTelegramPathA_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_startOfTelegramPathA_ASM:                   JMP     ATA_startOfTelegramPathA_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_endOfTelegramPathB_ASM</b>
+    \sa ATA_endOfTelegramPathB_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_endOfTelegramPathB_ASM:                     JMP     ATA_endOfTelegramPathB_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_endOfTelegramPathA_ASM</b>
+    \sa ATA_endOfTelegramPathA_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_endOfTelegramPathA_ASM:                     JMP     ATA_endOfTelegramPathA_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_dataFifoFillLevelReached_ASM</b>
+    \sa ATA_dataFifoFillLevelReached_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_dataFifoFillLevelReached_ASM:               JMP     ATA_dataFifoFillLevelReached_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_rssiPreambleFifoFillLevelReached_ASM</b>
+    \sa ATA_rssiPreambleFifoFillLevelReached_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_rssiPreambleFifoFillLevelReached_ASM:       JMP     ATA_rssiPreambleFifoFillLevelReached_ASM
+
+; module RFTX
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_txStateInitSSM_C</b>
+    \sa ATA_txStateInitSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_txStateInitSSM_C:                           JMP     ATA_txStateInitSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_txStateStartSSM_C</b>
+    \sa ATA_txStateStartSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_txStateStartSSM_C:                          JMP     ATA_txStateStartSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_txStateWait4SSMrdy_C</b>
+    \sa ATA_txStateWait4SSMrdy_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_txStateWait4SSMrdy_C:                       JMP     ATA_txStateWait4SSMrdy_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_txTransparentStateWait4SSMrdy_C</b>
+    \sa ATA_txTransparentStateWait4SSMrdy_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_txTransparentStateWait4SSMrdy_C:            JMP     ATA_txTransparentStateWait4SSMrdy_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_txStateTransparentMode_C</b>
+    \sa ATA_txStateTransparentMode_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_txStateTransparentMode_C:                   JMP     ATA_txStateTransparentMode_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_txStateWait4FillLevel_C</b>
+    \sa ATA_txStateWait4FillLevel_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_txStateWait4FillLevel_C:                    JMP     ATA_txStateWait4FillLevel_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_txStateStartTxModulator_C</b>
+    \sa ATA_txStateStartTxModulator_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_txStateStartTxModulator_C:                  JMP     ATA_txStateStartTxModulator_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_txStateStartWait4TransmissionComplete_C</b>
+    \sa ATA_txStateStartWait4TransmissionComplete_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_txStateStartWait4TransmissionComplete_C:    JMP     ATA_txStateStartWait4TransmissionComplete_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_openTimer3forTxing_C</b>
+    \sa ATA_openTimer3forTxing_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_openTimer3forTxing_C:                       JMP     ATA_openTimer3forTxing_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_sysTxingBufferedMode_C</b>
+    \sa ATA_sysTxingBufferedMode_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_sysTxingBufferedMode_C:                     JMP     ATA_sysTxingBufferedMode_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_sysTxingTransparentMode_C</b>
+    \sa ATA_sysTxingTransparentMode_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_sysTxingTransparentMode_C:                  JMP     ATA_sysTxingTransparentMode_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_TxModulatorTelegramFinish_ASM</b>
+    \sa ATA_TxModulatorTelegramFinish_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_TxModulatorTelegramFinish_ASM:              JMP     ATA_TxModulatorTelegramFinish_ASM
+
+; module SYSTEM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_check4extRequests_C</b>
+    \sa ATA_check4extRequests_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_check4extRequests_C:                        JMP     ATA_check4extRequests_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_serviceInitSwitching_C</b>
+    \sa ATA_serviceInitSwitching_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_serviceInitSwitching_C:                     JMP     ATA_serviceInitSwitching_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_systemFlowCtrl_C</b>
+    \sa ATA_systemFlowCtrl_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_systemFlowCtrl_C:                           JMP     ATA_systemFlowCtrl_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_sysExeStateMachineFunc_C</b>
+    \sa ATA_sysExeStateMachineFunc_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_sysExeStateMachineFunc_C:                   JMP     ATA_sysExeStateMachineFunc_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_setIdleMode_C</b>
+    \sa ATA_setIdleMode_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_setIdleMode_C:                              JMP     ATA_setIdleMode_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_systemFlowStateWaitXtoReady_C</b>
+    \sa ATA_systemFlowStateWaitXtoReady_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_systemFlowStateWaitXtoReady_C:              JMP     ATA_systemFlowStateWaitXtoReady_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_systemStartSSM_C</b>
+    \sa ATA_systemStartSSM_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_systemStartSSM_C:                           JMP     ATA_systemStartSSM_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_systemWait4SSMrdy_C</b>
+    \sa ATA_systemWait4SSMrdy_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_systemWait4SSMrdy_C:                        JMP     ATA_systemWait4SSMrdy_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_systemFlowStateShutdownTRX_C</b>
+    \sa ATA_systemFlowStateShutdownTRX_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_systemFlowStateShutdownTRX_C:               JMP     ATA_systemFlowStateShutdownTRX_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_systemFlowStateWait4ShutdownRdyTRX_C</b>
+    \sa ATA_systemFlowStateWait4ShutdownRdyTRX_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_systemFlowStateWait4ShutdownRdyTRX_C:       JMP     ATA_systemFlowStateWait4ShutdownRdyTRX_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_systemFlowStateMachineEnd_C</b>
+    \sa ATA_systemFlowStateMachineEnd_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_systemFlowStateMachineEnd_C:                JMP     ATA_systemFlowStateMachineEnd_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_systemErrorLoop_C</b>
+    \sa ATA_systemErrorLoop_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_systemErrorLoop_C:                          JMP     ATA_systemErrorLoop_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_lowBatt_C</b>
+    \sa ATA_lowBatt_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_lowBatt_C:                                  JMP     ATA_lowBatt_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_avccLow_C</b>
+    \sa ATA_avccLow_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_avccLow_C:                                  JMP     ATA_avccLow_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_avccReset_C</b>
+    \sa ATA_avccReset_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_avccReset_C:                                JMP     ATA_avccReset_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_triggerSrcCalibration_C</b>
+    \sa ATA_triggerSrcCalibration_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_triggerSrcCalibration_C:                    JMP     ATA_triggerSrcCalibration_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_triggerFrcCalibration_C</b>
+    \sa ATA_triggerFrcCalibration_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_triggerFrcCalibration_C:                    JMP     ATA_triggerFrcCalibration_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_triggerSelfCheck_C</b>
+    \sa ATA_triggerSelfCheck_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_triggerSelfCheck_C:                         JMP     ATA_triggerSelfCheck_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_wait4avcc_C</b>
+    \sa ATA_wait4avcc_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_wait4avcc_C:                                JMP     ATA_wait4avcc_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_systemModeSwitching_C</b>
+    \sa ATA_systemModeSwitching_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_systemModeSwitching_C:                      JMP     ATA_systemModeSwitching_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_tuneCheckSwitching_C</b>
+    \sa ATA_tuneCheckSwitching_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_tuneCheckSwitching_C:                       JMP     ATA_tuneCheckSwitching_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_miscTriggerSwitching_C</b>
+    \sa ATA_miscTriggerSwitching_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_miscTriggerSwitching_C:                     JMP     ATA_miscTriggerSwitching_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_setEventPin_ASM</b>
+    \sa ATA_setEventPin_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_setEventPin_ASM:                            JMP     ATA_setEventPin_ASM
+
+; module TIMER1
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer1Open_C</b>
+    \sa ATA_timer1Open_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer1Open_C:                               JMP     ATA_timer1Open_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer1Close_ASM</b>
+    \sa ATA_timer1Close_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer1Close_ASM:                            JMP     ATA_timer1Close_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer1ComIntHandler_ASM</b>
+    \sa ATA_timer1ComIntHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer1ComIntHandler_ASM:                    JMP     ATA_timer1ComIntHandler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer1OvfIntHandler_ASM</b>
+    \sa ATA_timer1OvfIntHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer1OvfIntHandler_ASM:                    JMP     ATA_timer1OvfIntHandler_ASM
+
+; module TIMER2
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer2Open_C</b>
+    \sa ATA_timer2Open_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer2Open_C:                               JMP     ATA_timer2Open_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer2Close_ASM</b>
+    \sa ATA_timer2Close_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer2Close_ASM:                            JMP     ATA_timer2Close_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer2ComIntHandler_ASM</b>
+    \sa ATA_timer2ComIntHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer2ComIntHandler_ASM:                    JMP     ATA_timer2ComIntHandler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer2OvfIntHandler_ASM</b>
+    \sa ATA_timer2OvfIntHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer2OvfIntHandler_ASM:                    JMP     ATA_timer2OvfIntHandler_ASM
+
+; module TIMER3
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer3Open_C</b>
+    \sa ATA_timer3Open_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer3Open_C:                               JMP     ATA_timer3Open_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer3Close_ASM</b>
+    \sa ATA_timer3Close_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer3Close_ASM:                            JMP     ATA_timer3Close_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer3ComIntHandler_ASM</b>
+    \sa ATA_timer3ComIntHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer3ComIntHandler_ASM:                    JMP     ATA_timer3ComIntHandler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer3OvfIntHandler_ASM</b>
+    \sa ATA_timer3OvfIntHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer3OvfIntHandler_ASM:                    JMP     ATA_timer3OvfIntHandler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer3CapIntHandler_ASM</b>
+    \sa ATA_timer3CapIntHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer3CapIntHandler_ASM:                    JMP     ATA_timer3CapIntHandler_ASM
+
+; module TIMER4
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer4Open_C</b>
+    \sa ATA_timer4Open_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer4Open_C:                               JMP     ATA_timer4Open_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer4Close_ASM</b>
+    \sa ATA_timer4Close_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer4Close_ASM:                            JMP     ATA_timer4Close_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer4ComIntHandler_ASM</b>
+    \sa ATA_timer4ComIntHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer4ComIntHandler_ASM:                    JMP     ATA_timer4ComIntHandler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer4OvfIntHandler_ASM</b>
+    \sa ATA_timer4OvfIntHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer4OvfIntHandler_ASM:                    JMP     ATA_timer4OvfIntHandler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer4CapIntHandler_ASM</b>
+    \sa ATA_timer4CapIntHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer4CapIntHandler_ASM:                    JMP     ATA_timer4CapIntHandler_ASM
+
+; module TIMER5
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer5Open_C</b>
+    \sa ATA_timer5Open_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer5Open_C:                               JMP     ATA_timer5Open_C
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer5Close_ASM</b>
+    \sa ATA_timer5Close_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer5Close_ASM:                            JMP     ATA_timer5Close_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer5ComIntHandler_ASM</b>
+    \sa ATA_timer5ComIntHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer5ComIntHandler_ASM:                    JMP     ATA_timer5ComIntHandler_ASM
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer5OvfIntHandler_ASM</b>
+    \sa ATA_timer5OvfIntHandler_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer5OvfIntHandler_ASM:                    JMP     ATA_timer5OvfIntHandler_ASM
+
+; --SIX-3375--
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_stopSsmWatchdog_C</b>
+    \sa ATA_stopSsmWatchdog_C
+*/
+/* ---------------------------------------------------------------------------*/
+API_stopSsmWatchdog_C:                          JMP     ATA_stopSsmWatchdog_C
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>API_timer1ResetRun_ASM</b>
+    \sa ATA_timer1ResetRun_ASM
+*/
+/* ---------------------------------------------------------------------------*/
+API_timer1ResetRun_ASM:                          JMP     ATA_timer1ResetRun_ASM
+; --SIX-3375--
+
+    END

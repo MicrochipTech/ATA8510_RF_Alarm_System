@@ -1,0 +1,1112 @@
+/* *ASM************************************************************************
+  Use of this software is subject to Atmel's Software License Agreement.
+-------------------------------------------------------------------------------
+  $URL: http://svnservulm.corp.atmel.com/svn/CDB/Apps/Apps_SW/Trunk/SW_Projects/XC8/ATA8510_FLASH_XC8/src/firmware/globals/src/globals_asm.s90 $
+  $LastChangedRevision: 648718 $
+  $LastChangedDate: 2021-10-27 15:12:44 +0200 (Mi, 27 Okt 2021) $
+  $LastChangedBy: gwillbol $
+-------------------------------------------------------------------------------
+  Project:      ATA5831
+  Target MCU:   ATA5831
+  Compiler:     IAR Assembler for AVR 5.51.0
+-------------------------------------------------------------------------------
+  
+******************************************************************************
+* Copyright 2011, Atmel Automotive GmbH                                       *
+*                                                                             *
+* This software is owned by the Atmel Automotive GmbH                         *
+* and is protected by and subject to worldwide patent protection.             *
+* Atmel hereby grants to licensee a personal,                                 *
+* non-exclusive, non-transferable license to copy, use, modify, create        *
+* derivative works of, and compile the Atmel Source Code and derivative       *
+* works for the sole purpose of creating custom software in support of        *
+* licensee product to be used only in conjunction with a Atmel integrated     *
+* circuit as specified in the applicable agreement. Any reproduction,         *
+* modification, translation, compilation, or representation of this           *
+* software except as specified above is prohibited without the express        *
+* written permission of Atmel.                                                *
+*                                                                             *
+* Disclaimer: ATMEL MAKES NO WARRANTY OF ANY KIND,EXPRESS OR IMPLIED,         *
+* WITH REGARD TO THIS MATERIAL, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED    *
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.         *
+* Atmel reserves the right to make changes without further notice to the      *
+* materials described herein. Atmel does not assume any liability arising     *
+* out of the application or use of any product or circuit described herein.   *
+* Atmel does not authorize its products for use as critical components in     *
+* life-support systems where a malfunction or failure may reasonably be       *
+* expected to result in significant injury to the user. The inclusion of      *
+* Atmel products in a life-support systems application implies that the       *
+* manufacturer assumes all risk of such use and in doing so indemnifies       *
+* Atmel against all charges.                                                  *
+*                                                                             *
+* Use may be limited by and subject to the applicable Atmel software          *
+* license agreement.                                                          *
+*******************************************************************************/
+/* \file globals_asm.s90
+*/
+    NAME globals_asm
+
+    PUBLIC ATA_clkSwitchXTO_ASM
+    PUBLIC ATA_mpy16u
+    PUBLIC ATA_mpy16s
+    PUBLIC ATA_waitNus_ASM
+    PUBLIC ATA_mulU8U8_ASM
+    PUBLIC ATA_mulS8U8_ASM
+    PUBLIC ATA_mpy16u_ASM
+    PUBLIC ATA_mpy16s_ASM
+    PUBLIC ATA_divU16U8_ASM
+    PUBLIC ATA_mulU8UbyCor_ASM
+    
+    PUBLIC ATA_copyEepSvc_ASM
+    PUBLIC ATA_copyEepChannel_ASM
+    
+    PUBLIC ATA_copySramSvc_ASM
+    PUBLIC ATA_copySramChannel_ASM
+    
+    EXTERN ATA_eepRDbyte_ASM
+    
+    EXTERN eepTrxCal
+ 
+/* ===========================================================================*/
+/*   INCLUDES                                                                 */
+/* ===========================================================================*/
+#include "rf.h"
+#include "regs.inc"                              
+#include "globals.h"
+#include "eep.h"
+
+/* ===========================================================================*/
+/*   DEFINES                                                                  */
+/* ===========================================================================*/
+/* ===========================================================================*/
+/*   Modul Globals                                                            */
+/* ===========================================================================*/
+/* ===========================================================================*/
+/*   IMPLEMENTATION                                                           */
+/* ===========================================================================*/
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_clkSwitchXTO_ASM</b>
+    switches the AVR core to be clocked with XTO/4. Keep prescaler
+    settings in mind.
+          
+    \return none 
+    
+    \image html ATA_clkSwitchXTO_ASM.png
+    \image rtf ATA_clkSwitchXTO_ASM.png
+    \n
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_clkSwitchXTO_ASM:
+    IN      R30 , CMCR
+    ANDI    R30 , (BM_CMCCE | BM_CMONEN | BM_SRCD)
+    ORI     R30 , (BM_CMM0 | BM_CMM1 | BM_CMM2)
+    LDI     R31 , BM_CMCCE
+    CLI                                                                 
+    SBR     R30 , BM_CCS
+    OUT     CMCR , R31                                                       
+    OUT     CMCR , R30
+    SEI                                                                 
+    ; set divider to 1
+    LDI     R30 , BM_CLPCE                                                       
+    LDI     R31 , BM_CLTPS0                                                       
+    CLI                                                                 
+    OUT     CLPR , R30                                                      
+    OUT     CLPR , R31                                                      
+    SEI
+    RET
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_mulU8U8_ASM</b>
+    multiplies an unsigned 8 bit val with an unsigned 8 bit value.
+    
+    \param factor1 is stored in R16
+    \param factor2 is stored in R17
+
+    \return result is stored in R17:R16
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_mulU8U8_ASM:
+    PUSH    R0                                           
+    PUSH    R1                                           
+    MUL     R16 , R17    ; Multiply factor1 with factor2              
+    MOV     R16 , R0                                           
+    MOV     R17 , R1                                           
+    POP     R1                                           
+    POP     R0
+    RET
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_mulS8U8_ASM</b>
+    multiplies an signed 8 bit val with an unsigned 8 bit value.
+    
+    \param factor1 is stored in R16
+    \param factor2 is stored in R17
+
+    \return result is stored in R17:R16
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_mulS8U8_ASM:
+    PUSH    R0                                           
+    PUSH    R1                                           
+    MULSU   R16 , R17    ; Multiply factor1 with factor2              
+    MOV     R16 , R0                                           
+    MOV     R17 , R1                                           
+    POP     R1                                           
+    POP     R0
+    RET
+    
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_mpy16u_ASM</b>
+    This subroutine multiplies the two 16 bit register variables r19:r18
+    and r17:r16. The result is placed in r19:r18:r17:r16.
+    
+    \param factor1 is stored in R17:R16
+    \param factor2 is stored in R19:R18
+    
+    \return product is stored in R19:R18:R17:R16
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_mpy16u_ASM:
+    CALL    ATA_mpy16u                          
+    MOV     R16 , R18
+    MOV     R17 , R19
+    MOV     R18 , R20
+    MOV     R19 , R21
+
+    RET
+
+/* startDoxyExclude */    
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_mpy16u</b>
+    This subroutine multiplies the two 16 bit register variables r19:r18
+    and r17:r16. The result is placed in r21:r20:r19:r18.
+    Number of words  :14 + return
+    Number of cycles :153 + return
+    Low registers used   :None
+    High registers used  :7 (r18,r19,r16/r18,r17/r19,r20,r21,r22)
+    .def    mc16uL  =r16        ;multiplicand low byte
+    .def    mc16uH  =r17        ;multiplicand high byte
+    .def    mp16uL  =r18        ;multiplier low byte
+    .def    mp16uH  =r19        ;multiplier high byte
+    .def    m16u0   =r18        ;result byte 0 (LSB)
+    .def    m16u1   =r19        ;result byte 1
+    .def    m16u2   =r20        ;result byte 2
+    .def    m16u3   =r21        ;result byte 3 (MSB)
+    .def    mcnt16u =r22        ;loop counter
+   
+    \param factor1 is stored in R17:R16
+    \param factor2 is stored in R19:R18
+ 
+    \return product is stored in R21:R20:R19:R18
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_mpy16u:
+    PUSH    R22                                                            
+    CLR     R21          ; clear 2 highest bytes of result                   
+    CLR     R20                                                            
+    LDI     R22 , 16     ; init loop counter                                 
+    LSR     R19                                                            
+    ROR     R18                                                            
+M16U_1:                                                             
+    BRCC    NOAD8        ; if bit 0 of multiplier set                        
+    ADD     R20 , R16    ; add multiplicand Low to byte 2 of res             
+    ADC     R21 , R17    ; add multiplicand high to byte 3 of res            
+NOAD8:                                                              
+    ROR     R21          ; shift right result byte 3                         
+    ROR     R20          ; rotate right result byte 2                        
+    ROR     R19          ; rotate result byte 1 and multiplier High          
+    ROR     R18          ; rotate result byte 0 and multiplier Low           
+    DEC     R22          ; decrement loop counter                            
+    BRNE    M16U_1       ; if not done, loop more                            
+    POP     R22                                                            
+    RET
+/* stopDoxyExclude */
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_mpy16s_ASM</b>
+    This subroutine multiplies the two 16 bit register variables r19:r18
+    and r17:r16. The result is placed in r19:r18:r17:r16.
+    
+    \param factor1 is stored in R17:R16
+    \param factor2 is stored in R19:R18
+    
+    \return product is stored in R19:R18:R17:R16
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_mpy16s_ASM:
+    CALL    ATA_mpy16s
+    MOV     R16 , R18
+    MOV     R17 , R19
+    MOV     R18 , R20
+    MOV     R19 , R21
+
+    RET
+
+/* startDoxyExclude */    
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_mpy16s</b>
+    16x16 Bit Signed Multiplication
+    This subroutine multiplies signed the two 16-bit register variables 
+    mp16sH:mp16sL and mc16sH:mc16sL.
+    The result is placed in m16s3:m16s2:m16s1:m16s0.
+    The routine is an implementation of Booth's algorithm. If all 32 bits
+    in the result are needed, avoid calling the routine with
+    -32768 ($8000) as multiplicand
+    Number of words :16 + return
+    Number of cycles    :210/226 (Min/Max) + return
+    Low registers used  :None
+    High registers used  :7 (mp16sL,mp16sH,mc16sL/m16s0,mc16sH/m16s1,
+                            m16s2,m16s3,mcnt16s)    
+
+    .def    mc16sL  =r16        ;multiplicand low byte
+    .def    mc16sH  =r17        ;multiplicand high byte
+    .def    mp16sL  =r18        ;multiplier low byte
+    .def    mp16sH  =r19        ;multiplier high byte
+    .def    m16s0   =r18        ;result byte 0 (LSB)
+    .def    m16s1   =r19        ;result byte 1
+    .def    m16s2   =r20        ;result byte 2
+    .def    m16s3   =r21        ;result byte 3 (MSB)
+    .def    mcnt16s =r22        ;loop counter
+ */
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_mpy16s: 
+    CLR     R21         ; clear result byte 3
+    SUB     R20 , R20   ; clear result byte 2 and carry
+    LDI     R22 , 16    ; init loop counter
+m16s_1: 
+    BRCC    m16s_2      ; if carry (previous bit) set
+    ADD     R20 , R16   ;    add multiplicand Low to result byte 2
+    ADC     R21 , R17   ;    add multiplicand High to result byte 3
+m16s_2: 
+    SBRC    R18 , 0     ; if current bit set
+    SUB     R20 , R16   ;    sub multiplicand Low from result byte 2
+    SBRC    R18 , 0     ; if current bit set
+    SBC     R21 , R17   ;    sub multiplicand High from result byte 3
+    ASR     R21         ; shift right result and multiplier
+    ROR     R20
+    ROR     R19
+    ROR     R18
+    DEC     R22         ; decrement counter
+    BRNE    m16s_1      ; if not done, loop more    
+    RET
+/* stopDoxyExclude */
+
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_waitNus_ASM</b>
+    waits N us. Parameter N is passed via R16.
+
+    \param N is stored in R16
+
+    \return none
+    
+    \image html ATA_waitNus_ASM.png
+    \image rtf ATA_waitNus_ASM.png
+    \n
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_waitNus_ASM:
+WAITNUS_START:
+    CPI     R16 , 0x00          ; check for 0x00 in R16                      
+    BREQ    END_WAITNUS         ; loop end                                   
+    DEC     R16                 ; decrement R16                              
+    RJMP    WAITNUS_START
+END_WAITNUS:
+    RET
+    
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_mulU8UbyCor_ASM</b>
+    multiplies an unsigned 8 bit by (256+offset) and shifts the result to fit
+    into 16 bit.
+    This routine is written to be used inside the IRQ context. If it is used
+    outside, then R17, R16 has to stored/restored. This is realized
+    via a wrapper.
+
+    \param factor1 is stored in R25
+
+    \return result is stored in R17:R16
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_mulU8UbyCor_ASM:
+
+    PUSH    R0
+    PUSH    R1
+    
+    ;R25 holds the actual used compVal;                                 
+    LDI     R17 , high(eepTrxCal+EEP_TRXCALIB_CALCONF2)     ;setup Address for EEP read   
+    LDI     R16 , low(eepTrxCal+EEP_TRXCALIB_CALCONF2)                             
+    CALL    ATA_eepRDbyte_ASM                               ;result is placed in R16                    
+ 
+    MUL     R16,R25                                         ;Multiply factor1 with factor2 => R1:R0
+    LSR     R1                                              ;divided by tw0                                           
+    ROR     R0 
+
+    MOV     R16,R0                                       
+    MOV     R17,R1   
+    CLR     R0
+    LSR     R25
+    ROR     R0
+   
+    ADD     R16,R0
+    ADC     R17,R25
+                     
+    POP     R1                                    
+    POP     R0                                     
+   
+    RET
+   
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_divU16U8_ASM</b>
+    divides an unsigned 16 bit val by an unsigned 8 bit value.
+    This routine is written to be used inside the IRQ context. If it is used
+    outside, then R31, R30 has to stored/restored. This is realized
+    via a wrapper.
+    
+    \param dividend is stored in R17:R16
+    \param quotient is stored in R25
+    
+    \return result is stored in R25
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_divU16U8_ASM:
+   
+    PUSH    R4                                                  
+    PUSH    R5                                                 
+    PUSH    R18                                            
+   
+    ;----Reg init----                                           
+    CLR     R4                  ;set result LSB to 0x01                    
+    LDI     R18 , 0x01          ;clear rsult MSB, return value             
+    CLR     R5                  ;help register                             
+    ;----Reg init----                                           
+   
+    ;----Div Loop----                                           
+    DIVLOOPA:                                                  
+    CLC                         ;Clear carry flag                          
+    ROL     R16                 ;shift LSB divident                        
+    ROL     R17                 ;shift MSB divident                        
+    ROL     R5                  ;shift help register                       
+    BRCS    DIVSUBA             ;'1' rolled out => SUBTRACT                
+    CP      R5 , R25            ;comp help reg with quotient               
+    BRCS    DIVNOSUBA           ;No subtraction                            
+    
+DIVSUBA:                                                  
+    SUB     R5 , R25            ;Subtract quotient                         
+    SEC                         ;set carry                                 
+    RJMP    DIVENDA                                             
+
+DIVNOSUBA:                                                     
+    CLC                         ;clear carry                               
+    
+DIVENDA:                                           
+    ROL     R18                                       
+    ROL     R4                                         
+    BRCC    DIVLOOPA                                           
+    
+    LSR     R25                 ;check wether to round up or not           
+    CP      R5 , R25                                            
+    BRLO    DIVROUNDENDA                                             
+    INC     R18               
+    
+DIVROUNDENDA:                                           
+    MOV     R25 , R18           ;mov result to register                    
+    ;----Div Loop----         
+    
+    POP     R18                                                
+    POP     R5                                                   
+    POP     R4                                                     
+    
+    RET   
+    
+    
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_copyEepSvc_ASM</b>
+    reads an eep service .
+
+    \param dstPtr   in register R17:R16
+    \param srcPtr   in register R19:R18
+
+    \return none
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_copyEepSvc_ASM:
+    SBIC    EECR , EEWE
+    RJMP    ATA_copyEepSvc_ASM
+    OUT     EEARH , R19
+    OUT     EEARL , R18
+    ; --SIX-3196--
+    LDS     R30 , EECR2
+    ORI     R30 , BM_EEBRE
+    STS     EECR2 , R30
+    ; --SIX-3196--
+
+    MOVW    R30 , R16
+
+    ; 0 - 9
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 6
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 7
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 8
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 9
+    ST      Z+ , R16
+    ; 10 - 19
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 6
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 7
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 8
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 9
+    ST      Z+ , R16
+    ; 20 - 29
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 6
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 7
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 8
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 9
+    ST      Z+ , R16
+    ; 30 - 39
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 6
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 7
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 8
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 9
+    ST      Z+ , R16
+    ; 40 - 49
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 6
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 7
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 8
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 9
+    ST      Z+ , R16
+    ; 50 - 59
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 6
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 7
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 8
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 9
+    ST      Z+ , R16
+    ; 60 - 69
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 6
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 7
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 8
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 9
+    ST      Z+ , R16
+    ; 70 - 79
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 6
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 7
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 8
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 9
+    ST      Z+ , R16
+    ; 80 - 89
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 6
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 7
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 8
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 9
+    ST      Z+ , R16
+    ; 90 - 99
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 6
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 7
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 8
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 9
+    ST      Z+ , R16
+    ; 100 - 109
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 6
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 7
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 8
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 9
+    ST      Z+ , R16
+    ; 110 - 119
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 6
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 7
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 8
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 9
+    ST      Z+ , R16
+    ; 120 - 125
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 5
+    ST      Z+ , R16
+
+    ; --SIX-3196--
+    LDS     R30 , EECR2
+    ANDI    R30 , ~BM_EEBRE
+    STS     EECR2 , R30
+    ; --SIX-3196--
+    
+    RET
+    
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_copyEepChannel_ASM</b>
+    reads an eep service.
+    
+    \param dstPtr   in register R17:R16
+    \param srcPtr   in register R19:R18
+        
+    \return none
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_copyEepChannel_ASM:
+    SBIC    EECR , EEWE
+    RJMP    ATA_copyEepChannel_ASM
+    OUT     EEARH , R19
+    OUT     EEARL , R18
+    ; --SIX-3196--
+    LDS     R30 , EECR2
+    ORI     R30 , BM_EEBRE
+    STS     EECR2 , R30
+    ; --SIX-3196--
+    
+    MOVW    R30 , R16
+
+    ; 0 - 4
+    IN      R16 , EEDR  ; 0
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 1
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 2
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 3
+    ST      Z+ , R16
+    IN      R16 , EEDR  ; 4
+    ST      Z+ , R16
+
+    ; --SIX-3196--
+    LDS     R30 , EECR2
+    ANDI    R30 , ~BM_EEBRE
+    STS     EECR2 , R30
+    ; --SIX-3196--
+
+    RET
+    
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_copySramSvc_ASM</b>
+    reads an SRAM service and stores it to currentService.service.
+
+    \param dstPtr   in register R17:R16
+    \param srcPtr   in register R19:R18
+
+    \return none
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_copySramSvc_ASM:
+    PUSH    R26
+    PUSH    R27         ; push IAR compiler preserved registers only
+
+    MOVW    R30 , R16   ; copy dstPtr to Z
+    MOVW    R26 , R18   ; copy srcPtr to X
+
+    ; 0 - 9
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+    LD      R16 , X+    ; 6
+    ST      Z+ , R16
+    LD      R16 , X+    ; 7
+    ST      Z+ , R16
+    LD      R16 , X+    ; 8
+    ST      Z+ , R16
+    LD      R16 , X+    ; 9
+    ST      Z+ , R16
+
+    ; 10 - 19
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+    LD      R16 , X+    ; 6
+    ST      Z+ , R16
+    LD      R16 , X+    ; 7
+    ST      Z+ , R16
+    LD      R16 , X+    ; 8
+    ST      Z+ , R16
+    LD      R16 , X+    ; 9
+    ST      Z+ , R16
+
+    ; 20 - 29
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+    LD      R16 , X+    ; 6
+    ST      Z+ , R16
+    LD      R16 , X+    ; 7
+    ST      Z+ , R16
+    LD      R16 , X+    ; 8
+    ST      Z+ , R16
+    LD      R16 , X+    ; 9
+    ST      Z+ , R16
+
+    ; 30 - 39
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+    LD      R16 , X+    ; 6
+    ST      Z+ , R16
+    LD      R16 , X+    ; 7
+    ST      Z+ , R16
+    LD      R16 , X+    ; 8
+    ST      Z+ , R16
+    LD      R16 , X+    ; 9
+    ST      Z+ , R16
+
+    ; 40 - 49
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+    LD      R16 , X+    ; 6
+    ST      Z+ , R16
+    LD      R16 , X+    ; 7
+    ST      Z+ , R16
+    LD      R16 , X+    ; 8
+    ST      Z+ , R16
+    LD      R16 , X+    ; 9
+    ST      Z+ , R16
+
+    ; 50 - 59
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+    LD      R16 , X+    ; 6
+    ST      Z+ , R16
+    LD      R16 , X+    ; 7
+    ST      Z+ , R16
+    LD      R16 , X+    ; 8
+    ST      Z+ , R16
+    LD      R16 , X+    ; 9
+    ST      Z+ , R16
+
+    ; 60 - 69
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+    LD      R16 , X+    ; 6
+    ST      Z+ , R16
+    LD      R16 , X+    ; 7
+    ST      Z+ , R16
+    LD      R16 , X+    ; 8
+    ST      Z+ , R16
+    LD      R16 , X+    ; 9
+    ST      Z+ , R16
+
+    ; 70 - 79
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+    LD      R16 , X+    ; 6
+    ST      Z+ , R16
+    LD      R16 , X+    ; 7
+    ST      Z+ , R16
+    LD      R16 , X+    ; 8
+    ST      Z+ , R16
+    LD      R16 , X+    ; 9
+    ST      Z+ , R16
+
+    ; 80 - 89
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+    LD      R16 , X+    ; 6
+    ST      Z+ , R16
+    LD      R16 , X+    ; 7
+    ST      Z+ , R16
+    LD      R16 , X+    ; 8
+    ST      Z+ , R16
+    LD      R16 , X+    ; 9
+    ST      Z+ , R16
+
+    ; 90 - 99
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+    LD      R16 , X+    ; 6
+    ST      Z+ , R16
+    LD      R16 , X+    ; 7
+    ST      Z+ , R16
+    LD      R16 , X+    ; 8
+    ST      Z+ , R16
+    LD      R16 , X+    ; 9
+    ST      Z+ , R16
+
+    ; 100 - 109
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+    LD      R16 , X+    ; 6
+    ST      Z+ , R16
+    LD      R16 , X+    ; 7
+    ST      Z+ , R16
+    LD      R16 , X+    ; 8
+    ST      Z+ , R16
+    LD      R16 , X+    ; 9
+    ST      Z+ , R16
+
+    ; 110 - 119
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+    LD      R16 , X+    ; 6
+    ST      Z+ , R16
+    LD      R16 , X+    ; 7
+    ST      Z+ , R16
+    LD      R16 , X+    ; 8
+    ST      Z+ , R16
+    LD      R16 , X+    ; 9
+    ST      Z+ , R16
+
+    ; 120 - 125
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    LD      R16 , X+    ; 5
+    ST      Z+ , R16
+
+    POP     R27         ; pop IAR compiler preserved registers only
+    POP     R26
+
+    RET
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_copySramChannel_ASM</b>
+    reads an SRAM channel and stores it to currentService.channel.
+    
+    \param dstPtr   in register R17:R16
+    \param srcPtr   in register R19:R18
+    
+    \return none
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_copySramChannel_ASM:
+    PUSH    R26
+    PUSH    R27         ; push IAR compiler preserved registers only
+
+    MOVW    R30 , R16   ; copy dstPtr to Z
+    MOVW    R26 , R18   ; copy srcPtr to X
+
+    ; 0 - 4
+    LD      R16 , X+    ; 0
+    ST      Z+ , R16
+    LD      R16 , X+    ; 1
+    ST      Z+ , R16
+    LD      R16 , X+    ; 2
+    ST      Z+ , R16
+    LD      R16 , X+    ; 3
+    ST      Z+ , R16
+    LD      R16 , X+    ; 4
+    ST      Z+ , R16
+    
+    POP     R27         ; pop IAR compiler preserved registers only
+    POP     R26
+
+    RET
+
+    END

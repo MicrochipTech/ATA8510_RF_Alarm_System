@@ -1,0 +1,518 @@
+/* *ASM************************************************************************
+  Use of this software is subject to Atmel's Software License Agreement.
+-------------------------------------------------------------------------------
+  $URL: http://svnservulm.corp.atmel.com/svn/CDB/Apps/Apps_SW/Trunk/SW_Projects/XC8/ATA8510_FLASH_XC8/src/firmware/calib/src/calib_asm.s90 $
+  $LastChangedRevision: 648718 $
+  $LastChangedDate: 2021-10-27 15:12:44 +0200 (Mi, 27 Okt 2021) $
+  $LastChangedBy: gwillbol $
+-------------------------------------------------------------------------------
+  Project:      ATA5831
+  Target MCU:   ATA5831
+  Compiler:     IAR Assembler for AVR 5.51.0
+-------------------------------------------------------------------------------
+
+******************************************************************************
+* Copyright 2011, Atmel Automotive GmbH                                       *
+*                                                                             *
+* This software is owned by the Atmel Automotive GmbH                         *
+* and is protected by and subject to worldwide patent protection.             *
+* Atmel hereby grants to licensee a personal,                                 *
+* non-exclusive, non-transferable license to copy, use, modify, create        *
+* derivative works of, and compile the Atmel Source Code and derivative       *
+* works for the sole purpose of creating custom software in support of        *
+* licensee product to be used only in conjunction with a Atmel integrated     *
+* circuit as specified in the applicable agreement. Any reproduction,         *
+* modification, translation, compilation, or representation of this           *
+* software except as specified above is prohibited without the express        *
+* written permission of Atmel.                                                *
+*                                                                             *
+* Disclaimer: ATMEL MAKES NO WARRANTY OF ANY KIND,EXPRESS OR IMPLIED,         *
+* WITH REGARD TO THIS MATERIAL, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED    *
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.         *
+* Atmel reserves the right to make changes without further notice to the      *
+* materials described herein. Atmel does not assume any liability arising     *
+* out of the application or use of any product or circuit described herein.   *
+* Atmel does not authorize its products for use as critical components in     *
+* life-support systems where a malfunction or failure may reasonably be       *
+* expected to result in significant injury to the user. The inclusion of      *
+* Atmel products in a life-support systems application implies that the       *
+* manufacturer assumes all risk of such use and in doing so indemnifies       *
+* Atmel against all charges.                                                  *
+*                                                                             *
+* Use may be limited by and subject to the applicable Atmel software          *
+* license agreement.                                                          *
+*******************************************************************************/
+/*  \file calib_asm.s90
+*/
+    NAME calib_asm
+
+    PUBLIC ATA_checkModulationType4TX_ASM
+    PUBLIC ATA_correctTimer1CompVal_ASM
+    PUBLIC ATA_frcMeas_ASM
+    PUBLIC ATA_frcCalib_ASM
+    PUBLIC ATA_srcCalib_ASM
+    PUBLIC ATA_getT2T3_ASM
+    PUBLIC ATA_shiftRightInt32_ASM
+    PUBLIC ATA_shiftRightInt16_ASM
+
+
+    EXTERN ATA_eepRDbyte_ASM
+    EXTERN ATA_timer2ResetRun_ASM
+    EXTERN ATA_timer2Close_ASM
+    EXTERN ATA_timer3Close_ASM
+    EXTERN ATA_mulU8UbyCor_ASM
+    EXTERN ATA_divU16U8_ASM
+    EXTERN ATA_setSystemError_ASM
+
+
+    EXTERN trxConf
+    EXTERN currentService
+    EXTERN frcResults
+    EXTERN eepFRCcalib
+    EXTERN timer2
+    EXTERN timer3
+    EXTERN calib
+    EXTERN pollConfig
+    EXTERN debug
+
+/* ===========================================================================*/
+/*   INCLUDES                                                                 */
+/* ===========================================================================*/
+#include "regs.inc"
+#include "globals.h"
+#include "calib.h"
+#include "eep.h"
+#include "..\..\rfpolling\src\rfpolling.h"
+
+/* ===========================================================================*/
+/*   DEFINES                                                                  */
+/* ===========================================================================*/
+COMPVAL     EQU 0x00              ; Assembler defines
+COMPVALCORR EQU 0x01              ; Assembler defines
+
+/* ===========================================================================*/
+/*   Modul Globals                                                            */
+/* ===========================================================================*/
+
+/* ===========================================================================*/
+/*   IMPLEMENTATION                                                           */
+/* ===========================================================================*/
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_checkModulationType4TX_ASM</b>
+    checks the modulation type (ASK or FSK) for TX of current application.
+    return value is set to 0x00 if FSK modulation type is used, otherwise different from 0x00
+
+    \return return value is stored in R16
+    
+    \image html ATA_checkModulationType4TX_ASM.png
+    \image rtf ATA_checkModulationType4TX_ASM.png
+    \n
+*/
+/* ---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_checkModulationType4TX_ASM:
+
+    LDI     R16 , 0x00               ; load default return value
+    LDS     R31 , trxConf + TRXCONF_SERVICE_CHANNEL_CONFIG
+CHECK_PATHA:
+    SBRS    R31 , TRXCONF_SERVICE_CHANNEL_CONFIG_ENA_PATHA
+    RJMP    CHECK_PATHB
+
+    LDS     R16 , currentService + SERVICE_TXSETPATHA + 1
+    ANDI    R16 , BM_SERVICE_TXSETPATHA_MODULATION          ; return currentService.txSetPathA[1].TXmodA
+    RJMP    END_CHECK_PATH
+CHECK_PATHB:
+    SBRS    R31 , TRXCONF_SERVICE_CHANNEL_CONFIG_ENA_PATHB
+    RJMP    END_CHECK_PATH
+    LDS     R16 , currentService + SERVICE_TXSETPATHB + 1
+    ANDI    R16 , BM_SERVICE_TXSETPATHB_MODULATION          ; return currentService.txSetPathB[1].TXmodB
+END_CHECK_PATH:
+    RET
+
+
+/*---------------------------------------------------------------------------*/
+/** \brief <b>ATA_frcCalib_ASM</b>
+    measures the FRC oscillator with Timer2 and Timer3.
+    Timer2 generates a gate time and Timer3 counts the pulses of the FRC
+    oscillator. FRCCAL register will be manipulated in the way to achieve
+    the desired FRC frequency. The actual routine used for tuning the FRC
+    called two times.
+
+    \return none
+
+    \image html ATA_frcCalib_ASM.png
+    \image rtf ATA_frcCalib_ASM.png
+    \n
+*/
+/*---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_frcCalib_ASM:
+
+    PUSH    R24                         ;
+    CALL    ATA_getT2T3_ASM             ;get Timer2 and Timer3
+    SBRC    R30 , 0                     ;check if opening was okay
+
+    RJMP    ERROR_Handling_frcCalib
+
+    CALL    ATA_frcMeas_ASM
+    CALL    ATA_frcMeas_ASM              ;do it twice!! -> to improve the output of the algo due iteration
+
+    CALL    ATA_timer2Close_ASM
+    CALL    ATA_timer3Close_ASM
+
+    RJMP    END_frcCalib
+
+ERROR_Handling_frcCalib:
+
+    LDI     R30 , DEBUG_ERROR_CODE_SRC_FRC_CALIB_FAILED    ; set debug code
+    STS     debug , R30
+    CLR     R30
+    STS     debug + DEBUG_SSM_ERROR_CODE, R30
+
+    call    ATA_setSystemError_ASM          ; set system error
+
+
+END_frcCalib:
+    POP     R24
+
+    RET
+
+/*---------------------------------------------------------------------------*/
+/** \brief <b>ATA_frcMeas_ASM</b>
+    measures the FRC oscillator with Timer2 and Timer3.
+    Timer2 generates a gate time and Timer3 counts the pulses of the FRC
+    oscillator. The count value delivering the actual frequency of the FRC
+    is generated via the TIMER3 ICAP irq.
+
+    \return none
+
+    \image html ATA_frcMeas_ASM.png
+    \image rtf ATA_frcMeas_ASM.png
+    \n
+*/
+/*---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_frcMeas_ASM:
+
+; ----- Configure timer3 -----------------------------------------------
+    LDI     R30 , 0x00                      ; 0x03 clk timer3 with FRC prescaler =1
+    STS     T3MRA , R30
+    LDI     R30 , (BM_T3CE0)                ; 0x0C T2 trig. for capture,rise edge
+    STS     T3MRB , R30
+    LDI     R30 , (BM_T3ENA|BM_T3CPRM)      ; 0x88 enable, capEvent reset
+    OUT     T3CR , R30
+
+; ----- Configure timer2 -----------------------------------------------
+    LDI     R17 , high(eepFRCcalib+0)       ; setup Address for EEP read
+    LDI     R16 , low(eepFRCcalib+0)
+    CALL    ATA_eepRDbyte_ASM               ; result is placed in R16
+    LDI     R31 , 0x38                      ; 0x01 set comp val
+    STS     T2COR , R31
+    LDI     R31 , 0x03                      ; XTO/4 in clk, prescaler=2
+    STS     T2MR , R31
+
+    LDI     R31 , (BM_T2ENA|BM_T2CTM|BM_T2CRM)  ; 0x86 enable timer2
+    OUT     T2CR , R31
+
+    LDI     R31 , 0x07
+    OUT     T3IFR , R31
+    OUT     T2IFR , R31
+    CALL    ATA_timer2ResetRun_ASM
+
+CHECKT2CNTVAL1F:
+    IN      R31 , T2IFR                     ; load timer2 counter value
+    SBRS    R31 , 1                         ; check if 1
+    RJMP    CHECKT2CNTVAL1F
+
+    ; get input capture value
+    STS     T2COR , R16
+    LDI     R31 , (BM_T2ENA|BM_T2CTM)       ; 0x84 enable timer2
+    OUT     T2CR , R31
+    LDI     R31 , 0x07
+    OUT     T3IFR , R31
+
+CHECKT3CAPEVENT:
+    IN      R31 , T3IFR                     ; load timer3 IRQ flags
+    SBRS    R31 , 2                         ; check if CAP event occured
+    RJMP    CHECKT3CAPEVENT
+    LDS     R30 , T3ICRL                    ; load low byte of IC
+    LDS     R31 , T3ICRH                    ; load high byte of IC
+
+    ; high byte can be ignored as range is 200 +/- 10% ==> 180-220
+    CPI     R31 , 1
+    BRSH    RES_FRC_SH200
+    CPI     R30 , 200
+    BRSH    RES_FRC_SH200
+
+RES_FRC_L200:
+    SUBI    R30 , 0xFD                      ; Add 3 to result
+
+RES_FRC_SH200:
+    ; Divide by four
+    LSR     R31
+    ROR     R30
+    LSR     R31
+    ROR     R30
+    STS     frcResults+COMPVALDATA , R30
+
+    ; check range fitting -> fit R30 in range 45 ... 55
+    CPI     R30 , 45
+    BRSH    FRC_VAL_IN_RANGE_LOW_END
+    LDI     R30 , 45
+
+FRC_VAL_IN_RANGE_LOW_END:
+    CPI     R30 , 55
+    BRLO    FRC_VAL_IN_RANGE_HIGH_END
+    LDI     R30 , 55
+
+FRC_VAL_IN_RANGE_HIGH_END:
+    LDI     R31 , 50
+    SUB     R31 , R30                       ; 50 - res
+    LDS     R30 , FRCCAL
+    ; --SIX-3106-- 
+    ANDI    R30 , (BM_FRCCAL4 | BM_FRCCAL3 | BM_FRCCAL2 | BM_FRCCAL1 | BM_FRCCAL0)
+    ; --SIX-3106-- 
+    ADD     R30 , R31                       ; RANGE check!
+    CPI     R30 , 0x80
+    BRLO    RESFRCPOSITIVE
+    LDI     R30 , 0x00                      ; adjust result to 0x00
+
+RESFRCPOSITIVE:
+    CPI     R30 , 0x1F
+    BRLO    RESRANGEOKAY
+    LDI     R30 , 0x1F
+
+RESRANGEOKAY:
+    STS     FRCCAL , R30                    ; update R30
+
+    RET
+
+/*---------------------------------------------------------------------------*/
+/** \brief <b>ATA_getT2T3_ASM</b>
+    locks and powers up Timer2 and Timer3. The routine is designed
+    to be used inside the IRQ context. Return value is placed in R30. If the
+    opening was successfull 0x00 is returned. Otherwise R31 and R30 are set to
+    0xFF to indicate an error.
+
+    \return none
+
+    \image html ATA_getT2T3_ASM.png
+    \image rtf ATA_getT2T3_ASM.png
+    \n
+*/
+/*---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_getT2T3_ASM:
+
+    LDS     R30 , timer2+TMR2STATE          ;load timer2 status
+    LDS     R31 , timer3+TMR3STATE          ;load timer3 status
+    OR      R30 , R31                       ;OR both status bytes
+    CPI     R30 , 0x00                      ;check if both are available
+    BREQ    T2T3FREE
+    LDI     R31 , 0xFF                     ;indicates an error
+    LDI     R30 , 0xFF                     ;indicates an error
+    RET
+
+T2T3FREE:
+    LDI     R30 , 0x80                      ;Lock timer2 and timer3
+    STS     timer2+TMR2STATE , R30          ;lock timer2 status
+    STS     timer3+TMR3STATE , R30          ;lock timer3 status
+
+;----- power up Timer2 and Timer3 -------------------------------------
+    CLI
+
+    IN      R30 , PRR1                      ;load PRR1 register
+    ANDI    R30 , ~(BM_PRT3|BM_PRT2)        ;0xF9, ena pwr for timer2 and timer3
+    OUT     PRR1 , R30                      ;write back to PRR1
+
+    SEI
+
+    LDI     R30 , 0x00
+    STS     T2IMR , R30                     ;disable all IRQs
+    STS     T3IMR , R30                     ;disable all IRQs
+
+    RET
+
+/*---------------------------------------------------------------------------*/
+/** \brief <b>ATA_srcCalib_ASM</b>
+    tunes the SRC oscillator by compensating the TIMER1 COMPARE
+    IRQ by calculating a correction factor to the programmed compare value.
+    Routine is designed to be used inside the ISR context.
+    Therefore R31, R30 do not have to be stored/restored.
+
+    \return none
+
+    \image html ATA_srcCalib_ASM.png
+    \image rtf ATA_srcCalib_ASM.png
+    \n
+*/
+/*---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_srcCalib_ASM:
+    CALL    ATA_srcMeas_ASM                 ;do the Measurement
+    CPI     R31 , 0x00                      ;check if Meas okay
+    BRNE    NOCORRECTSRC
+    CALL    ATA_correctTimer1CompVal_ASM    ;correct compVal
+NOCORRECTSRC:
+    RET
+
+
+/*---------------------------------------------------------------------------*/
+/** \brief <b>ATA_correctTimer1CompVal_ASM</b>
+    correct the stored Timer1 compVal according to the meas. done by timer2
+    and timer3. comValCorr = (97/x)*compVal = (97*comVal)/x
+    x has to be already calculated. It is stored in: calib.srcRes
+    uint16_t tmp;
+    tmp = ATA_mulU8U8((uint8_t)97,rtc.compVal);
+    rtc.compValCorr = ATA_divU16U8(tmp,calib.srcRes);
+    It is assumed that R16, R17 are already stored!
+
+    \return none
+
+    \image html ATA_correctTimer1CompVal_ASM.png
+    \image rtf ATA_correctTimer1CompVal_ASM.png
+    \n
+*/
+/*---------------------------------------------------------------------------*/
+
+RSEG CODE:CODE:ROOT(1)
+ATA_correctTimer1CompVal_ASM:
+    PUSH    R25
+    LDS     R16 , pollConfig + POLL_T1COR       ; load POLL_T1CorVal
+    MOV     R25 , R16                           ; mov compVal to R25
+    CALL    ATA_mulU8UbyCor_ASM                 ; (R25*389)>>1 = R17,R16
+    LDS     R25 , calib+SRCRESULT               ; load result of SRC analysis
+    CALL    ATA_divU16U8_ASM                    ; R17|R16 / R25 = R25
+    STS     calib+SRCCORVAL , R25               ; store correct compVal
+    POP     R25
+    RET
+
+
+/*---------------------------------------------------------------------------*/
+/** \brief <b>ATA_srcMeas_ASM</b>
+    This routine meassures the SRC oscillator with Timer2 and Timer3.
+    Timer2 generates a gate time and Timer3 counts the pulses of the SRC
+    oscillator.
+
+    \return result (high byte) is stored in R31
+
+    \image html ATA_srcMeas_ASM.png
+    \image rtf ATA_srcMeas_ASM.png
+    \n
+*/
+/*---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_srcMeas_ASM:
+    CALL    ATA_getT2T3_ASM                 ; get Timer2 and Timer3
+    SBRC    R30 , 0                         ; check if opening was okay
+    RJMP    ERROR_HANDLING_OF_SRC_MEAS      ; timers are not available
+
+; ----- Configure timer3 -----------------------------------------------
+    LDI     R30 , (BM_T3CS1|BM_T3CS0)       ; 0x03 clk timer3 with XTO/2
+    STS     T3MRA , R30
+    LDI     R30 , (BM_T3CE0|BM_T3CNC)       ; 0x0C T2 trig. for capture,rise edge
+    STS     T3MRB , R30
+    LDI     R30 , (BM_T3ENA|BM_T3CPRM)      ; 0x88 enable, capEvent reset
+    OUT     T3CR , R30
+
+; ----- Configure timer2 -----------------------------------------------
+    LDI     R30 , 0x00                      ; SRC in clk, no prescaler
+    STS     T2MR , R30
+    LDI     R30 , 0x01                      ; 0x01 set comp val
+    STS     T2COR , R30
+    LDI     R30 , (BM_T2ENA|BM_T2CTM)       ; 0x82 enable timer2
+    OUT     T2CR , R30
+    CAll    ATA_timer2ResetRun_ASM          ; reset and start timer2
+
+; ----- poll counter value of timer 2 ----------------------------------
+CHECKT2CNTVAL1:
+    IN      R30 , T2IFR                     ; load timer2 IFR
+    LDI     R31 , 0x02
+    ANDI    R30 , 0x02
+    CPI     R30 , 0x02                      ; check if matching
+    BRNE    CHECKT2CNTVAL1
+
+   ; get input capture value
+    OUT     T2IFR , R31
+    LDI     R30 , 0x05                      ; set comp val
+    STS     T2COR , R30
+
+CHECKT2CNTVAL5:
+    IN      R30 , T2IFR                     ; load timer2 IFR
+    ANDI    R30 , 0x02
+    CPI     R30 , 0x02                      ; check if 5 ticks have elapsed
+    BRNE    CHECKT2CNTVAL5
+    LDS     R30 , T3ICRL                    ; load low byte of IC
+    LDS     R31 , T3ICRH                    ; load high byte of IC
+
+    LSR     R31                             ; fit result to 8 bit
+    ROR     R30
+    STS     calib+SRCRESULT , R30           ; store result to calib.srcResL
+
+    CALL    ATA_timer2Close_ASM
+    CALL    ATA_timer3Close_ASM
+
+    CPI     R31 , 0x00
+    BREQ    END_OF_SRC_MEAS
+
+ERROR_HANDLING_OF_SRC_MEAS:
+
+    LDI     R30 , DEBUG_ERROR_CODE_SRC_FRC_CALIB_FAILED    ; set debug code
+    STS     debug , R30
+    CLR     R30
+    STS     debug + DEBUG_SSM_ERROR_CODE, R30
+
+    call    ATA_setSystemError_ASM          ; set system error
+
+    LDI     R31 , 0xFF                      ; indicates an error
+
+END_OF_SRC_MEAS:
+
+    RET
+
+
+/*---------------------------------------------------------------------------*/
+/** \brief <b>ATA_shiftRightInt32_ASM</b>
+    This routine shifts an signed long to the right.
+
+    \param  word contains a signed long word in R19:R18:R17:R16
+    \param  shiftValue is located in R20
+
+    \return result is stored in R19:R18:R17:R16
+*/
+/*---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_shiftRightInt32_ASM:
+    DEC     R20
+    BRMI    ENDSHIFTRIGHTINT32
+    ASR     R19
+    ROR     R18
+    ROR     R17
+    ROR     R16
+    RJMP    ATA_shiftRightInt32_ASM
+ENDSHIFTRIGHTINT32:
+    RET
+
+/*---------------------------------------------------------------------------*/
+/** \brief <b>ATA_shiftRightInt16_ASM</b>
+    This routine shifts an signed short to the right.
+
+    \param  word contains a signed short word in R17:R16
+    \param  shiftValue is located in R18
+
+    \return result is stored in R17:R16
+*/
+/*---------------------------------------------------------------------------*/
+RSEG CODE:CODE:ROOT(1)
+ATA_shiftRightInt16_ASM:
+    DEC     R18
+    BRMI    ENDSHIFTRIGHTINT16
+    ASR     R17
+    ROR     R16
+    RJMP    ATA_shiftRightInt16_ASM
+ENDSHIFTRIGHTINT16:
+    RET
+/*---------------------------------------------------------------------------*/
+
+    END

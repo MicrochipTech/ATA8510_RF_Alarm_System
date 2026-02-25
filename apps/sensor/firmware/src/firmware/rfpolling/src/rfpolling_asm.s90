@@ -1,0 +1,130 @@
+/* *ASM************************************************************************
+  Use of this software is subject to Atmel's Software License Agreement.
+-------------------------------------------------------------------------------
+  $URL: http://svnservulm.corp.atmel.com/svn/CDB/Apps/Apps_SW/Trunk/SW_Projects/XC8/ATA8510_FLASH_XC8/src/firmware/rfpolling/src/rfpolling_asm.s90 $
+  $LastChangedRevision: 648718 $
+  $LastChangedDate: 2021-10-27 15:12:44 +0200 (Mi, 27 Okt 2021) $
+  $LastChangedBy: gwillbol $
+-------------------------------------------------------------------------------
+  Project:      ATA5831
+  Target MCU:   ATA5831
+  Compiler:     IAR Assembler for AVR 5.51.0
+-------------------------------------------------------------------------------
+
+******************************************************************************
+* Copyright 2011, Atmel Automotive GmbH                                       *
+*                                                                             *
+* This software is owned by the Atmel Automotive GmbH                         *
+* and is protected by and subject to worldwide patent protection.             *
+* Atmel hereby grants to licensee a personal,                                 *
+* non-exclusive, non-transferable license to copy, use, modify, create        *
+* derivative works of, and compile the Atmel Source Code and derivative       *
+* works for the sole purpose of creating custom software in support of        *
+* licensee product to be used only in conjunction with a Atmel integrated     *
+* circuit as specified in the applicable agreement. Any reproduction,         *
+* modification, translation, compilation, or representation of this           *
+* software except as specified above is prohibited without the express        *
+* written permission of Atmel.                                                *
+*                                                                             *
+* Disclaimer: ATMEL MAKES NO WARRANTY OF ANY KIND,EXPRESS OR IMPLIED,         *
+* WITH REGARD TO THIS MATERIAL, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED    *
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.         *
+* Atmel reserves the right to make changes without further notice to the      *
+* materials described herein. Atmel does not assume any liability arising     *
+* out of the application or use of any product or circuit described herein.   *
+* Atmel does not authorize its products for use as critical components in     *
+* life-support systems where a malfunction or failure may reasonably be       *
+* expected to result in significant injury to the user. The inclusion of      *
+* Atmel products in a life-support systems application implies that the       *
+* manufacturer assumes all risk of such use and in doing so indemnifies       *
+* Atmel against all charges.                                                  *
+*                                                                             *
+* Use may be limited by and subject to the applicable Atmel software          *
+* license agreement.                                                          *
+*******************************************************************************/
+/* \file rfpolling_asm.s90
+*/
+    NAME rfpolling_asm
+
+
+    PUBLIC ATA_pollStateISR_ASM
+
+    EXTERN pPollSysFlowStateMachine
+    EXTERN flowCtrl
+    EXTERN pollStatus
+    EXTERN pollConfig
+    EXTERN calib
+
+
+/* ===========================================================================*/
+/*   INCLUDES                                                                 */
+/* ===========================================================================*/
+#include "globals.h"
+#include "regs.inc"
+#include "rfpolling.h"
+#include "eep.h"
+#include "calib.h"
+
+/* ===========================================================================*/
+/*   DEFINES                                                                  */
+/* ===========================================================================*/
+/* ===========================================================================*/
+/*   Modul Globals                                                            */
+/* ===========================================================================*/
+/* ===========================================================================*/
+/*   IMPLEMENTATION                                                           */
+/* ===========================================================================*/
+
+//-----------------------------------------------------------------------------
+/** \brief <b>ATA_pollStateISR_ASM</b>
+    is used as timer 1 driven interrupt service routine and is intended to set 
+    internal (polling) flags and increments the global polling loop cycle counter.
+    It always modifies Timer1 Compare Register.
+
+    \return none
+
+    \image html ATA_pollStateISR_ASM.png
+    \image rtf ATA_pollStateISR_ASM.png
+    \n
+*/
+//-----------------------------------------------------------------------------
+RSEG CODE:CODE:ROOT(1)
+ATA_pollStateISR_ASM:
+   PUSH R24
+   PUSH R25
+;----- get status flags and modify them if possible -------------------
+   LDS  R30 , pollStatus+POLL_FLAGS
+   SBRC R30 , POLLING_ACTIVE          ;check if next cycle can be started
+;----- to be fast, omit compare command -------------------------------
+   RJMP POLL_LOOP_LOCKED   ;no access, channel polling still active
+; ----- signalize an active polling cycle ------------------------------
+   SBR  R30 , BM_POLLING_ACTIVE
+   STS  pollStatus+POLL_FLAGS , R30
+;----- increment global 16 bit polling cycle counter -------------------
+   LDI  R31 , high(pollStatus+POLL_CYCLE_CNT)
+   LDI  R30 , low(pollStatus+POLL_CYCLE_CNT)
+   LD   R24 , Z+                     ;load low byte of cycle counter
+   LD   R25 , Z                      ;load high byte of cycle counter
+   ADIW R24 , 1                      ;increment global cycle counter
+;----- do not care for overflow -> normally 12 bits are sufficient ----
+   ST   Z , R25                      ;store high byte of cycle counter
+   ST   -Z , R24                     ;store low byte of cycle counter
+;----- re-link function pointer to PollingMode SW state machine -------
+   ;flowCtrl.pLut = pPollSysFlowStateMachine;
+   LDS  R30 , pPollSysFlowStateMachine+0
+   LDS  R31 , pPollSysFlowStateMachine+1
+   STS  flowCtrl+SYSFLOWCTRL_PLUT_LOW_FUNCPTR_ADDR , R30
+   STS  flowCtrl+SYSFLOWCTRL_PLUT_HIGH_FUNCPTR_ADDR , R31
+;----- prevent system from entering sleep mode ------------------------
+   SBI  GPIOR3 , SYS_STATUS_TRIGGER_MAIN_LOOP
+POLL_LOOP_LOCKED:
+;----- modify Timer1 compare register ---------------------------------
+   LDS  R31 , T1COR
+   LDS  R30 , calib+SRCCORVAL           ;load SRC calibration result
+   ADD  R31 , R30
+   STS  T1COR , R31
+   POP  R25
+   POP  R24
+        RET
+
+   END

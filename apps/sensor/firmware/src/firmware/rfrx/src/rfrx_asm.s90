@@ -1,0 +1,843 @@
+/* *ASM************************************************************************
+  Use of this software is subject to Atmel's Software License Agreement.
+-------------------------------------------------------------------------------
+  $URL: http://svnservulm.corp.atmel.com/svn/CDB/Apps/Apps_SW/Trunk/SW_Projects/XC8/ATA8510_FLASH_XC8/src/firmware/rfrx/src/rfrx_asm.s90 $
+  $LastChangedRevision: 648718 $
+  $LastChangedDate: 2021-10-27 15:12:44 +0200 (Mi, 27 Okt 2021) $
+  $LastChangedBy: gwillbol $
+-------------------------------------------------------------------------------
+  Project:      ATA5831
+  Target MCU:   ATA5831
+  Compiler:     IAR Assembler for AVR 5.51.0
+-------------------------------------------------------------------------------
+
+******************************************************************************
+* Copyright 2011, Atmel Automotive GmbH                                       *
+*                                                                             *
+* This software is owned by the Atmel Automotive GmbH                         *
+* and is protected by and subject to worldwide patent protection.             *
+* Atmel hereby grants to licensee a personal,                                 *
+* non-exclusive, non-transferable license to copy, use, modify, create        *
+* derivative works of, and compile the Atmel Source Code and derivative       *
+* works for the sole purpose of creating custom software in support of        *
+* licensee product to be used only in conjunction with a Atmel integrated     *
+* circuit as specified in the applicable agreement. Any reproduction,         *
+* modification, translation, compilation, or representation of this           *
+* software except as specified above is prohibited without the express        *
+* written permission of Atmel.                                                *
+*                                                                             *
+* Disclaimer: ATMEL MAKES NO WARRANTY OF ANY KIND,EXPRESS OR IMPLIED,         *
+* WITH REGARD TO THIS MATERIAL, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED    *
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.         *
+* Atmel reserves the right to make changes without further notice to the      *
+* materials described herein. Atmel does not assume any liability arising     *
+* out of the application or use of any product or circuit described herein.   *
+* Atmel does not authorize its products for use as critical components in     *
+* life-support systems where a malfunction or failure may reasonably be       *
+* expected to result in significant injury to the user. The inclusion of      *
+* Atmel products in a life-support systems application implies that the       *
+* manufacturer assumes all risk of such use and in doing so indemnifies       *
+* Atmel against all charges.                                                  *
+*                                                                             *
+* Use may be limited by and subject to the applicable Atmel software          *
+* license agreement.                                                          *
+*******************************************************************************/
+/* \file rfrx_asm.s90
+*/
+
+    NAME rfrx_asm
+
+    PUBLIC ATA_wakeCheckOkPathB_ASM
+    PUBLIC ATA_wakeCheckOkPathA_ASM
+
+    PUBLIC ATA_startOfTelegramPathB_ASM
+    PUBLIC ATA_startOfTelegramPathA_ASM
+
+    PUBLIC ATA_endOfTelegramPathB_ASM
+    PUBLIC ATA_endOfTelegramPathA_ASM
+
+    PUBLIC ATA_dataFifoFillLevelReached_ASM
+    PUBLIC ATA_rssiPreambleFifoFillLevelReached_ASM
+
+    EXTERN ATA_setEventPin_ASM
+
+    EXTERN currentService
+    EXTERN trxConf
+    EXTERN rssiAtWcok
+
+    EXTERN frequencyOffsetAtWcok
+    EXTERN rxIrqEvents
+    EXTERN subChan
+
+/* ===========================================================================*/
+/*   INCLUDES                                                                 */
+/* ===========================================================================*/
+#include "regs.inc"
+#include "globals.h"
+#include "rfrx.h"
+
+/* ===========================================================================*/
+/*   DEFINES                                                                  */
+/* ===========================================================================*/
+/* ===========================================================================*/
+/*   Modul Globals                                                            */
+/* ===========================================================================*/
+/* ===========================================================================*/
+/*   IMPLEMENTATION                                                           */
+/* ===========================================================================*/
+/* ---------------------------------------------------------------------------*/
+/**  \brief <b>ATA_wakeCheckOkPathB_ASM</b>
+    is the IRQ handler for a wake check ok detection on path B.
+
+    \details
+    This interrupt service routine is used in all RXModes (pureRxMode, RXMode,
+    PollingMode).<br>
+    This ISR
+    \li ignores pathB information if a WakeCheckOk on path A is already detected.
+    \li enables TRPB and disables TRPA in pureRxMode.
+    \li enables/disables RF interrupts according to rxIrqEvents[1]
+        (after WCOA/B) configuration.
+    \li saves RSSAV information in variable rssiAtWcok[service][channel]
+    \li saves RXFOB information in variable frequencyOffsetAtWcok
+    \li set WCOB event in events_events (AVR register R14) and does
+        event pin setting according to the setting in currentService.service.rxSysEvent
+    \li reenables the SPI Interrupt Only to avoid a blocking of the SPI - ISR.
+
+    \return none
+
+    \image html ATA_wakeCheckOkPathB_ASM.png
+    \image rtf ATA_wakeCheckOkPathB_ASM.png
+    \n
+*/
+/* ---------------------------------------------------------------------------*/
+#pragma vector=UHF_WCOB_vect
+RSEG CODE:CODE:ROOT(1)
+ATA_wakeCheckOkPathB_ASM:
+    PUSH R30                        ; Store R30
+    PUSH R31                        ; Store R31
+
+    PUSH R16
+    PUSH R0
+    PUSH R1
+
+    IN   R30 , SREG                 ; Load SREG
+    PUSH R30                        ; Store SREG
+
+    SBI  MCUCR , SPIIO              ; enable SPI only interrupt
+    SEI                             ; re-enable IRQs
+
+    ; check for pure RXMode
+    LDS  R30 , trxConf + TRXCONF_SYSTEM_CONFIG
+    SBRS R30 , TRXCONF_SYSTEM_CONFIG_PURE_RX_ENA
+    RJMP TRP_NORMAL_B
+
+    ; ----- pure RXMode -----
+    SBIC RDSIFR , WCOA      ; On WCOB interrupt --> check for WCOA flag.
+                            ; If both occured, signalize path A as
+    RJMP END_WCOB_ISR       ; the winner in the event flags
+
+    LDI  R30 , BM_EOTBM
+    STS  RDSIMR , R30
+    ; enable TRPB / disable TRPA / TMDO also disabled
+    LDI  R30 , BM_ETRPB
+    STS  RDOCR , R30
+    SBI  DDRC , PINC5
+    RJMP SKIP_ENABLE_SOT_EOT_PATHB
+TRP_NORMAL_B:
+    LDS     R31 , RDSIMR
+    ANDI    R31 , (BM_WCOAM | BM_SOTAM | BM_EOTAM)      ; keep settings for pathA
+
+    LDS     R30 , rxIrqEvents + RXIRQEVENTS_AFTER_WCOAB
+    ANDI    R30 , (BM_WCOBM | BM_SOTBM | BM_EOTBM)
+    OR      R30 , R31
+    STS     RDSIMR , R30
+SKIP_ENABLE_SOT_EOT_PATHB:
+    ; ~~~~~~~~~~~~~ rssiAtWcok[serviceNumber][channelNumber] = RSSAV ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    ; uint8_t serviceNumber = trxConf.serviceChannelConfig & BM_TRXCONF_SERVICE_CHANNEL_CONFIG_SER;
+    LDS  R30 , trxConf + TRXCONF_SERVICE_CHANNEL_CONFIG
+    ANDI R30 , BM_TRXCONF_SERVICE_CHANNEL_CONFIG_SER
+    LDI  R31 , NUM_CHANNELS_PER_SERVICE
+    MUL  R30 , R31
+
+    ; uint8_t channelNumber = trxConf.serviceChannelConfig & BM_TRXCONF_SERVICE_CHANNEL_CONFIG_CH;
+    LDS  R30 , trxConf + TRXCONF_SERVICE_CHANNEL_CONFIG
+    ANDI R30 , BM_TRXCONF_SERVICE_CHANNEL_CONFIG_CH
+    SWAP R30
+    ADD  R0  , R30
+
+    LDI  R30 , low(rssiAtWcok)
+    LDI  R31 , high(rssiAtWcok)
+    ADD  R30 , R0
+    ADC  R31 , R1
+    LDS  R16 , RSSAV
+    ST   Z   , R16
+
+    ; ~~~~~~~~~~~~~ rssiAtWcok[serviceNumber][channelNumber] = RSSAV ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    LDS  R30 , RXFOB
+    STS  frequencyOffsetAtWcok , R30
+
+    ; trxStatus |= BM_TRX_STATUS_RX_WCOB;
+    SBI  GPIOR4 , TRX_STATUS_RX_WCOB
+    ; sysStatus |= BM_SYS_STATUS_TRIGGER_MAIN_LOOP;
+    SBI  GPIOR3 , SYS_STATUS_TRIGGER_MAIN_LOOP
+    ; events_events |= BM_EVENTS_EVENTS_WCOB;
+    SET
+    BLD  R14 , EVENTS_EVENTS_WCOB   ; SBR only works with R16 - R31
+    ; if( currentService.service.rxSysEvent & BM_SERVICE_RXSYSEVENT_WCOB )
+    LDS  R30 , currentService + SERVICE_RXSYSEVENT
+    SBRC R30 , SERVICE_RXSYSEVENT_WCOB
+    CALL ATA_setEventPin_ASM
+
+END_WCOB_ISR:
+    POP  R30                        ; LoadR30
+    OUT  SREG , R30                 ; Restore SREG
+    CBI  MCUCR , SPIIO              ; disable SPI only interrupt
+    POP  R1
+    POP  R0
+    POP  R16
+
+    POP  R31                        ; LoadR31
+    POP  R30                        ; LoadR30
+    RETI                            ; Return from the interrupt
+
+/* ---------------------------------------------------------------------------*/
+/**  \brief <b>ATA_wakeCheckOkPathA_ASM</b>
+    is the IRQ handler for a wake check ok detection on path A.
+
+    \details
+    This interrupt service routine is used in all RXModes (pureRxMode, RXMode,
+    PollingMode).<br>
+    This ISR
+    \li enables TRPA and disables TRPB in pureRxMode.
+    \li enables/disables RF interrupts according to rxIrqEvents[1]
+        (after WCOA/B) configuration.
+    \li saves RSSAV information in variable rssiAtWcok[service][channel]
+    \li saves RXFOA information in variable frequencyOffsetAtWcok
+    \li set WCOA event in events_events (AVR register R14) and does
+        event pin setting according to the setting in currentService.service.rxSysEvent
+    \li reenables the SPI Interrupt Only to avoid a blocking of the SPI - ISR.
+
+    \return none
+
+    \image html ATA_wakeCheckOkPathA_ASM.png
+    \image rtf ATA_wakeCheckOkPathA_ASM.png
+    \n
+*/
+/* ---------------------------------------------------------------------------*/
+#pragma vector=UHF_WCOA_vect
+RSEG CODE:CODE:ROOT(1)
+ATA_wakeCheckOkPathA_ASM:
+    PUSH R30                        ; Store R30
+    PUSH R31                        ; Store R31
+
+    PUSH R16
+    PUSH R0
+    PUSH R1
+
+    IN   R30 , SREG                 ; Load SREG
+    PUSH R30                        ; Store SREG
+
+    SBI  MCUCR , SPIIO              ; enable SPI only interrupt
+    SEI                             ; re-enable IRQs
+
+    ; Check for pure RXMode
+    LDS  R30 , trxConf + TRXCONF_SYSTEM_CONFIG
+    SBRS R30 , TRXCONF_SYSTEM_CONFIG_PURE_RX_ENA
+    RJMP TRP_NORMAL_A
+
+    ; ----- pure RXMode ----- :
+    LDI  R30 , BM_EOTAM
+    STS  RDSIMR , R30
+    ; disable TRPB / enable TRPA / TMDO also disabled
+    LDI  R30 , BM_ETRPA
+    STS  RDOCR , R30
+    SBI  DDRC , PINC2
+    RJMP SKIP_ENABLE_SOT_EOT_PATHA
+TRP_NORMAL_A:
+    LDS     R31 , RDSIMR
+    ANDI    R31 , (BM_WCOBM | BM_SOTBM | BM_EOTBM)      ; keep settings for pathB
+    LDS     R30 , rxIrqEvents + RXIRQEVENTS_AFTER_WCOAB
+    ANDI    R30 , (BM_WCOAM | BM_SOTAM | BM_EOTAM)
+    OR      R30 , R31
+    STS     RDSIMR , R30
+SKIP_ENABLE_SOT_EOT_PATHA:
+    ; ~~~~~~~~~~~~~ rssiAtWcok[serviceNumber][channelNumber] = RSSAV ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    ; uint8_t serviceNumber = trxConf.serviceChannelConfig & BM_TRXCONF_SERVICE_CHANNEL_CONFIG_SER;
+    LDS  R30 , trxConf + TRXCONF_SERVICE_CHANNEL_CONFIG
+    ANDI R30 , BM_TRXCONF_SERVICE_CHANNEL_CONFIG_SER
+    LDI  R31 , NUM_CHANNELS_PER_SERVICE
+    MUL  R30 , R31
+
+    ; uint8_t channelNumber = trxConf.serviceChannelConfig & BM_TRXCONF_SERVICE_CHANNEL_CONFIG_CH;
+    LDS  R30 , trxConf + TRXCONF_SERVICE_CHANNEL_CONFIG
+    ANDI R30 , BM_TRXCONF_SERVICE_CHANNEL_CONFIG_CH
+    SWAP R30
+    ADD  R0  , R30
+
+    LDI  R30 , low(rssiAtWcok)
+    LDI  R31 , high(rssiAtWcok)
+    ADD  R30 , R0
+    ADC  R31 , R1
+    LDS  R16 , RSSAV
+    ST   Z   , R16
+
+    ; ~~~~~~~~~~~~~ rssiAtWcok[serviceNumber][channelNumber] = RSSAV ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    LDS  R30 , RXFOA
+    STS  frequencyOffsetAtWcok , R30
+
+    ; trxStatus |= BM_TRX_STATUS_RX_WCOA;
+    SBI  GPIOR4 , TRX_STATUS_RX_WCOA
+    ; sysStatus |= BM_SYS_STATUS_TRIGGER_MAIN_LOOP;
+    SBI  GPIOR3 , SYS_STATUS_TRIGGER_MAIN_LOOP
+    ; events_events |= BM_EVENTS_EVENTS_WCOA;
+    SET
+    BLD  R14 , EVENTS_EVENTS_WCOA   ; SBR only works with R16 - R31
+    ; if( currentService.service.rxSysEvent & BM_SERVICE_RXSYSEVENT_WCOA )
+    LDS  R30 , currentService + SERVICE_RXSYSEVENT
+    SBRC R30 , SERVICE_RXSYSEVENT_WCOA
+    CALL ATA_setEventPin_ASM
+
+    POP  R30                        ; LoadR30
+    OUT  SREG , R30                 ; Restore SREG
+    CBI  MCUCR , SPIIO              ; disable SPI only interrupt
+    POP  R1
+    POP  R0
+    POP  R16
+
+    POP  R31                        ; LoadR31
+    POP  R30                        ; LoadR30
+    RETI                            ; Return from the interrupt
+
+/* ---------------------------------------------------------------------------*/
+/**  \brief <b>ATA_startOfTelegramPathB_ASM</b>
+    is the IRQ handler for a start of telegram ok detection on path B.
+
+    \details
+    This interrupt service routine is used in RXMode and PollingMode.<br>
+    This ISR
+    \li ignores pathB information if a StartOfTelegram on path A is already detected.
+    \li configures tegh data fifo buffer fill level interrupt according to the
+        setting in currentService.service.rxSetPathB[0] in RXMode(buffered)
+    \li enables/disables RF interrupts according to rxIrqEvents[2]
+        (after SOTA/B) configuration.
+    \li set SOTB event in events_events (AVR register R14) and does
+        event pin setting according to the setting in currentService.service.rxSysEvent
+    \li reenables the SPI Interrupt Only to avoid a blocking of the SPI - ISR.
+
+    \return none
+
+    \image html ATA_startOfTelegramPathB_ASM.png
+    \image rtf ATA_startOfTelegramPathB_ASM.png
+*/
+/* ---------------------------------------------------------------------------*/
+#pragma vector=UHF_SOTB_vect
+RSEG CODE:CODE:ROOT(1)
+ATA_startOfTelegramPathB_ASM:
+    PUSH R30
+    PUSH R31
+    IN   R30 , SREG
+    PUSH R30
+
+    SBI  MCUCR , SPIIO           ; enable SPI only interrupt
+    SEI                          ; re-enable IRQs
+
+    ; if( !(trxConf.systemModeConfig & BM_SYS_MODE_CONFIG_TRANSPARENT_MODE) )
+    LDS  R30 , trxConf + TRXCONF_SYSTEM_MODE_CONFIG
+    SBRC R30 , TRXCONF_SYSTEM_MODE_CONFIG_TRANSPARENT
+    RJMP SOT_PATHB_RX_TRANSPARENT
+    ; RXMode(buffered) currently used
+    ; DFC |= (currentService.service.rxSetPathB[0] & BM_SERVICE_RXSETPATHB_RX_BUF);
+    LDS  R30 , currentService + SERVICE_RXSETPATHB
+    ANDI R30 , BM_SERVICE_RXSETPATHB_RX_BUF
+    LDS  R31 , DFC
+    OR   R31 , R30
+    STS  DFC , R31
+    ; DFI |= BM_DFFLIM;      // enable data fifo buffer fill level interrupt
+    LDS  R30 , DFI
+    SBR  R30 , BM_DFFLIM
+    STS  DFI , R30
+SOT_PATHB_RX_TRANSPARENT:
+    SBIC RDSIFR , SOTA      ; On SOTB interrupt --> check SOTA and SOTB.
+                            ; If both occured, signalize PathA as the winner
+    RJMP END_SOTB_ISR       ; in the event flags
+                            ; (Path A interrupt is executed after SOTB ISR)
+
+    LDS  R31 , RDSIMR
+    ANDI R31 , (BM_WCOAM | BM_SOTAM | BM_EOTAM)      ; keep settings for pathA
+    LDS  R30 , rxIrqEvents + RXIRQEVENTS_AFTER_SOTAB
+    ANDI R30 , (BM_WCOBM | BM_SOTBM | BM_EOTBM)
+    OR   R30 , R31
+    STS  RDSIMR , R30
+
+    ; trxStatus |= BM_TRX_STATUS_RX_SOTB;
+    SBI  GPIOR4 , TRX_STATUS_RX_SOTB
+
+    ; prevent ID check until related EOT event occurs
+    LDS  R30 , trxConf + TRXCONF_IDSCAN_CTRL
+    CBR  R30 , (BM_SYS_ID_SCAN_CTRL_EOTB | BM_SYS_ID_SCAN_CTRL_EOTA)
+    STS  trxConf + TRXCONF_IDSCAN_CTRL , R30
+
+    ; sysStatus |= BM_SYS_STATUS_TRIGGER_MAIN_LOOP;
+    SBI  GPIOR3 , SYS_STATUS_TRIGGER_MAIN_LOOP
+    ; events_events |= BM_EVENTS_EVENTS_SOTB;
+    SET
+    BLD  R14 , EVENTS_EVENTS_SOTB   ; SBR only works with R16 - R31
+    ; if( currentService.service.rxSysEvent & BM_SERVICE_RXSYSEVENT_SOTB )
+    LDS  R30 , currentService + SERVICE_RXSYSEVENT
+    SBRC R30 , SERVICE_RXSYSEVENT_SOTB
+    CALL ATA_setEventPin_ASM
+END_SOTB_ISR:
+    POP  R30
+    OUT  SREG , R30
+    CBI  MCUCR , SPIIO              ; disable SPI only interrupt
+    POP  R31
+    POP  R30
+    RETI
+
+/* ---------------------------------------------------------------------------*/
+/**  \brief <b>ATA_startOfTelegramPathA_ASM</b>
+    is the IRQ handler for a start of telegram ok detection on path A.
+
+    \details
+    This interrupt service routine is used in RXMode and PollingMode.<br>
+    This ISR
+    \li enables/disables RF interrupts according to rxIrqEvents[2]
+        (after SOTA/B) configuration.
+    \li configures the data fifo buffer fill level interrupt according to the
+        setting in currentService.service.rxSetPathA[0] in RXMode(buffered)
+    \li set SOTA event in events_events (AVR register R14) and does
+        event pin setting according to the setting in currentService.service.rxSysEvent
+    \li reenables the SPI Interrupt Only to avoid a blocking of the SPI - ISR.
+
+    \return none
+
+    \image html ATA_startOfTelegramPathA_ASM.png
+    \image rtf ATA_startOfTelegramPathA_ASM.png
+*/
+/* ---------------------------------------------------------------------------*/
+#pragma vector=UHF_SOTA_vect
+RSEG CODE:CODE:ROOT(1)
+ATA_startOfTelegramPathA_ASM:
+    PUSH R30
+    PUSH R31
+    IN   R30 , SREG
+    PUSH R30
+
+    SBI  MCUCR , SPIIO              ; enable SPI only interrupt
+    SEI                             ; re-enable IRQs
+
+    ; if( !(trxConf.systemModeConfig & BM_SYS_MODE_CONFIG_TRANSPARENT_MODE) )
+    LDS  R30 , trxConf + TRXCONF_SYSTEM_MODE_CONFIG
+    SBRC R30 , TRXCONF_SYSTEM_MODE_CONFIG_TRANSPARENT
+    RJMP SOT_PATHA_RX_TRANSPARENT
+    ; RXMode(buffered) currently used
+    ; DFC |= (currentService.service.rxSetPathA[0] & BM_SERVICE_RXSETPATHA_RX_BUF);
+    LDS  R30 , currentService + SERVICE_RXSETPATHA
+    ANDI R30 , BM_SERVICE_RXSETPATHA_RX_BUF
+    LDS  R31 , DFC
+    OR   R31 , R30
+    STS  DFC , R31
+    ; DFI |= BM_DFFLIM;      // enable data fifo buffer fill level interrupt
+    LDS  R30 , DFI
+    SBR  R30 , BM_DFFLIM
+    STS  DFI , R30
+SOT_PATHA_RX_TRANSPARENT:
+    LDS  R31 , RDSIMR
+    ANDI R31 , (BM_WCOBM | BM_SOTBM | BM_EOTBM)      ; keep settings for pathB
+    LDS  R30 , rxIrqEvents + RXIRQEVENTS_AFTER_SOTAB
+    ANDI R30 , (BM_WCOAM | BM_SOTAM | BM_EOTAM)
+    OR   R30 , R31
+    STS  RDSIMR , R30
+
+    ; trxStatus |= BM_TRX_STATUS_RX_SOTA;
+    SBI  GPIOR4 , TRX_STATUS_RX_SOTA
+
+    ; prevent ID check until related EOT event occurs
+    LDS  R30 , trxConf + TRXCONF_IDSCAN_CTRL
+    CBR  R30 , (BM_SYS_ID_SCAN_CTRL_EOTB | BM_SYS_ID_SCAN_CTRL_EOTA)
+    STS  trxConf + TRXCONF_IDSCAN_CTRL , R30
+
+    ; sysStatus |= BM_SYS_STATUS_TRIGGER_MAIN_LOOP;
+    SBI  GPIOR3 , SYS_STATUS_TRIGGER_MAIN_LOOP
+    ; events_events |= BM_EVENTS_EVENTS_SOTA;
+    SET
+    BLD  R14 , EVENTS_EVENTS_SOTA   ; SBR only works with R16 - R31
+    ; if( currentService.service.rxSysEvent & BM_SERVICE_RXSYSEVENT_SOTA )
+    LDS  R30 , currentService + SERVICE_RXSYSEVENT
+    SBRC R30 , SERVICE_RXSYSEVENT_SOTA
+    CALL ATA_setEventPin_ASM
+
+    POP  R30
+    OUT  SREG , R30
+    CBI  MCUCR , SPIIO              ; disable SPI only interrupt
+    POP  R31
+    POP  R30
+    RETI
+
+/* ---------------------------------------------------------------------------*/
+/** \brief <b>ATA_endOfTelegramPathB_ASM</b>
+    is the IRQ handler for an end of telegram detection on path B.
+
+    \details
+    This interrupt service routine is used in all RXModes (pureRxMode, RXMode,
+    PollingMode).<br>
+    This ISR
+    \li disables EOTB interrupt to avoid multiple signaling.
+    \li disables TRPB and TRPA, sets PORTC.TRPA/TRPB to input and reenable
+        WCOA/WCOB interruptsin pureRxMode.
+    \li set EOTB event in events_events (AVR register R14) and does
+        event pin setting according to the setting in currentService.service.rxSysEvent
+    \li reenables the SPI Interrupt Only to avoid a blocking of the SPI - ISR.
+
+    \return none
+
+    \image html ATA_endOfTelegramPathB_ASM.png
+    \image rtf ATA_endOfTelegramPathB_ASM.png
+*/
+/* ---------------------------------------------------------------------------*/
+#pragma vector=UHF_EOTB_vect
+RSEG CODE:CODE:ROOT(1)
+ATA_endOfTelegramPathB_ASM:
+    PUSH R30                        ; Store R30
+    PUSH R31                        ; Store R31
+    IN   R30 , SREG                 ; Load SREG
+    PUSH R30                        ; Store SREG
+
+    SBI  MCUCR , SPIIO              ; enable SPI only interrupt
+    SEI                             ; re-enable IRQs
+
+    ; RDSIMR &= (uint8_t)~BM_EOTBM;
+    LDS  R30 , RDSIMR
+    CBR  R30 , BM_EOTBM;
+    STS  RDSIMR , R30
+
+    ; check for pure RXMode
+    LDS  R30 , trxConf + TRXCONF_SYSTEM_CONFIG
+    SBRS R30 , TRXCONF_SYSTEM_CONFIG_PURE_RX_ENA
+    RJMP RX_NORMAL_EOTB
+
+    ; disable TRPB and TRPA / TMDO also disabled
+    CLR  R30
+    STS  RDOCR , R30
+
+    ; set PC5 and PC2 to Input
+    CBI  DDRC , PINC2
+    CBI  DDRC , PINC5
+
+    ; clear RDSIFR register
+    LDI  R30 , 0xFF
+    OUT  RDSIFR , R30
+
+    ; re-enable wake check interrupts
+    LDI  R30 , (BM_WCOBM | BM_WCOAM)
+    STS  RDSIMR , R30
+
+    ; signalize HW to do path restart
+    LDS  R30 , SSMFCR
+    SBR  R30 , BM_SSMIDSF
+    STS  SSMFCR , R30
+
+RX_NORMAL_EOTB:
+    ; trxStatus |= BM_TRX_STATUS_RX_EOTB;
+    SBI  GPIOR4 , TRX_STATUS_RX_EOTB
+
+    ; enable check for valid IDs
+    LDS  R30 , trxConf + TRXCONF_IDSCAN_CTRL
+    SBR  R30 , BM_SYS_ID_SCAN_CTRL_EOTB
+    STS  trxConf + TRXCONF_IDSCAN_CTRL , R30
+
+    ; sysStatus |= BM_SYS_STATUS_TRIGGER_MAIN_LOOP;
+    SBI  GPIOR3 , SYS_STATUS_TRIGGER_MAIN_LOOP
+    ; events_events |= BM_EVENTS_EVENTS_EOTB;
+    SET
+    BLD  R14 , EVENTS_EVENTS_EOTB   ; SBR only works with R16 - R31
+
+    ; if( currentService.service.rxSysEvent & BM_SERVICE_RXSYSEVENT_EOTB )
+    LDS  R30 , currentService + SERVICE_RXSYSEVENT
+    SBRC R30 , SERVICE_RXSYSEVENT_EOTB
+    CALL ATA_setEventPin_ASM
+
+    POP  R30                        ; LoadR30
+    OUT  SREG , R30                 ; Restore SREG
+    CBI  MCUCR , SPIIO              ; disable SPI only interrupt
+    POP  R31                        ; LoadR31
+    POP  R30                        ; LoadR30
+    RETI                            ; Return from the interrupt
+
+/*---------------------------------------------------------------------------*/
+/** \brief <b>ATA_endOfTelegramPathA_ASM</b>
+    is the IRQ handler for an end of telegram detection on path A.
+
+    \details
+    This interrupt service routine is used in all RXModes (pureRxMode, RXMode,
+    PollingMode).<br>
+    This ISR
+    \li disables EOTA interrupt to avoid multiple signaling.
+    \li disables TRPB and TRPA, sets PORTC.TRPA/TRPB to input and reenable
+        WCOA/WCOB interruptsin pureRxMode.
+    \li set EOTA event in events_events (AVR register R14) and does
+        event pin setting according to the setting in currentService.service.rxSysEvent
+    \li reenables the SPI Interrupt Only to avoid a blocking of the SPI - ISR.
+
+    \return none
+
+    \image html ATA_endOfTelegramPathA_ASM.png
+    \image rtf ATA_endOfTelegramPathA_ASM.png
+*/
+/*---------------------------------------------------------------------------*/
+#pragma vector=UHF_EOTA_vect
+RSEG CODE:CODE:ROOT(1)
+ATA_endOfTelegramPathA_ASM:
+    PUSH R30                        ; Store R30
+    PUSH R31                        ; Store R31
+    IN   R30 , SREG                 ; Load SREG
+    PUSH R30                        ; Store SREG
+
+    SBI  MCUCR , SPIIO              ; enable SPI only interrupt
+    SEI                             ; re-enable IRQs
+
+    ; RDSIMR &= (uint8_t)~BM_EOTAM;
+    LDS  R30 , RDSIMR
+    CBR  R30 , BM_EOTAM;
+    STS  RDSIMR , R30
+
+    ; check for pure RXMode
+    LDS  R30 , trxConf + TRXCONF_SYSTEM_CONFIG
+    SBRS R30 , TRXCONF_SYSTEM_CONFIG_PURE_RX_ENA
+    RJMP RX_NORMAL_EOTA
+
+    ; disable TRPB and TRPA / TMDO also disabled
+    CLR  R30
+    STS  RDOCR , R30
+
+    ; set PC5 and PC2 to Input
+    CBI  DDRC , PINC2
+    CBI  DDRC , PINC5
+
+    ; clear RDSIFR register
+    LDI  R30 , 0xFF
+    OUT  RDSIFR , R30
+
+    ; re-enable wake check interrupts
+    LDI  R30 , (BM_WCOBM | BM_WCOAM)
+    STS  RDSIMR , R30
+
+    ; signalize HW to do path restart
+    LDS  R30 , SSMFCR
+    SBR  R30 , BM_SSMIDSF
+    STS  SSMFCR , R30
+
+RX_NORMAL_EOTA:
+    ; trxStatus |= BM_TRX_STATUS_RX_EOTA;
+    SBI  GPIOR4 , TRX_STATUS_RX_EOTA
+
+    ; enable check for valid IDs
+    LDS  R30 , trxConf + TRXCONF_IDSCAN_CTRL
+    SBR  R30 , BM_SYS_ID_SCAN_CTRL_EOTA
+    STS  trxConf + TRXCONF_IDSCAN_CTRL , R30
+
+    ; sysStatus |= BM_SYS_STATUS_TRIGGER_MAIN_LOOP;
+    SBI  GPIOR3 , SYS_STATUS_TRIGGER_MAIN_LOOP
+    ; events_events |= BM_EVENTS_EVENTS_EOTA;
+    SET
+    BLD  R14 , EVENTS_EVENTS_EOTA   ; SBR only works with R16 - R31
+
+    ; if( currentService.service.rxSysEvent & BM_SERVICE_RXSYSEVENT_EOTA )
+    LDS  R30 , currentService + SERVICE_RXSYSEVENT
+    SBRC R30 , SERVICE_RXSYSEVENT_EOTA
+    CALL ATA_setEventPin_ASM
+
+    POP  R30                        ; LoadR30
+    OUT  SREG , R30                 ; Restore SREG
+    CBI  MCUCR , SPIIO              ; disable SPI only interrupt
+    POP  R31                        ; LoadR31
+    POP  R30                        ; LoadR30
+    RETI                            ; Return from the interrupt
+
+/*---------------------------------------------------------------------------*/
+/** \brief <b>ATA_dataFifoFillLevelReached_ASM</b>
+    is the IRQ handler if the fill level of the data FIFO reaches the
+    configured fill level of register DFL.
+    \details
+    This interrupt service routine is used in RXMode and TXMode.<br>
+    In RXMode this ISR
+    \li set RX_BUF flag in events_system (AVR register R15) and sets event pin
+        according to the configuration in currentService.service.rxSetPathA[0]
+        or currentService.service.rxSetPathB[0]
+    \li reenables the SPI Interrupt Only to avoid a blocking of the SPI - ISR.<br>
+
+    In TXMode this ISR
+    \li set TX_BUF flag in events_system (AVR register R15) and sets event pin
+        according to the configuration in currentService.service.txSysEventA
+        or currentService.service.txSysEventB.
+    \li reenables the SPI Interrupt Only to avoid a blocking of the SPI - ISR.
+
+    \return none
+
+    \image html ATA_dataFifoFillLevelReached_ASM.png
+    \image rtf ATA_dataFifoFillLevelReached_ASM.png
+*/
+/*---------------------------------------------------------------------------*/
+#pragma vector=DFFLR_vect
+RSEG CODE:CODE:ROOT(1)
+ATA_dataFifoFillLevelReached_ASM:
+    PUSH R30                        ; Store R30
+    PUSH R31                        ; Store R31
+    IN   R30 , SREG                 ; Load SREG
+    PUSH R30                        ; Store SREG
+
+    SBI  MCUCR , SPIIO              ; enable SPI only interrupt
+    SEI                             ; re-enable IRQs
+
+    ; check for TXMode or RXMode
+    LDS  R30 , DFC
+    SBRS R30 , DFDRA
+    RJMP DFFLR_RXMODE
+
+    ; events_system |= BM_EVENTS_SYSTEM_TX_BUF;
+    SET
+    BLD  R15 , EVENTS_SYSTEM_TX_BUF     ; SBR only works with R16 - R31
+
+    ; if( trxConf.serviceChannelConfig & BM_SVC_CH_CONFIG_PATHA )
+    LDS  R30 , trxConf + TRXCONF_SERVICE_CHANNEL_CONFIG
+    SBRS R30 , TRXCONF_SERVICE_CHANNEL_CONFIG_ENA_PATHA
+    RJMP DFFLR_TXMODE_PATHB
+
+    ; if( currentService.service.txSysEventA & BM_SERVICE_TXSYSEVENTA_TXBUF_EVENT_MASK )
+    LDS  R30 , currentService + SERVICE_TXSYSEVENTA
+    SBRC R30 , SERVICE_TXSYSEVENTA_TX_BUF_EVENT_MASK
+    RJMP DFFLR_SET_EVENT_PIN
+    RJMP DFFLR_SKIP_SET_EVENT_PIN
+
+DFFLR_TXMODE_PATHB:
+    ; if( currentService.service.txSysEventB & BM_SERVICE_TXSYSEVENTB_TXBUF_EVENT_MASK )
+    LDS  R30 , currentService + SERVICE_TXSYSEVENTB
+    SBRC R30 , SERVICE_TXSYSEVENTB_TX_BUF_EVENT_MASK
+    RJMP DFFLR_SET_EVENT_PIN
+    RJMP DFFLR_SKIP_SET_EVENT_PIN
+
+DFFLR_RXMODE:
+    ; events_system |= BM_EVENTS_SYSTEM_RX_BUF;
+    SET
+    BLD  R15 , EVENTS_SYSTEM_RX_BUF     ; SBR only works with R16 - R31
+
+    ; if( RXBC2 & BM_RXBPB )
+    LDS  R30 , RXBC2
+    SBRC R30 , RXBPB
+    RJMP DFFLR_RXMODE_PATHB
+
+    ; data reception on path A
+    ; if (currentService.service.rxSetPathA[0] & BM_SERVICE_RXSETPATHA_RX_BUF_EVENT_MASK )
+    LDS  R30 , currentService + SERVICE_RXSETPATHA
+    SBRC R30 , SERVICE_RXSETPATHA_RX_BUF_EVENT_MASK
+    RJMP DFFLR_SET_EVENT_PIN
+    RJMP DFFLR_SKIP_SET_EVENT_PIN
+
+DFFLR_RXMODE_PATHB:
+    ; data reception on path B
+    ; if (currentService.service.rxSetPathB[0] & BM_SERVICE_RXSETPATHB_RX_BUF_EVENT_MASK )
+    LDS  R30 , currentService + SERVICE_RXSETPATHB
+    SBRS R30 , SERVICE_RXSETPATHB_RX_BUF_EVENT_MASK
+    RJMP DFFLR_SKIP_SET_EVENT_PIN
+
+DFFLR_SET_EVENT_PIN:
+    CALL ATA_setEventPin_ASM
+
+DFFLR_SKIP_SET_EVENT_PIN:
+    POP  R30                        ; LoadR30
+    OUT  SREG , R30                 ; Restore SREG
+    CBI  MCUCR , SPIIO              ; disable SPI only interrupt
+    POP  R31                        ; LoadR31
+    POP  R30                        ; LoadR30
+    RETI                            ; Return from the interrupt
+
+/*---------------------------------------------------------------------------*/
+/** \brief <b>ATA_rssiPreambleFifoFillLevelReached_ASM</b>
+    is the IRQ handler if the fill level of the rssi FIFO reaches the
+    configured fill level of register SFL.
+    \details
+    This interrupt service routine is used in RXMode and TXMode.<br>
+    This ISR
+    \li disables SFIFO fill level interrupt if subchanneling is currently executed
+    \li sets RSSI_BUF event in events_system (AVR register R15) and sets event pin
+        according to currentService.service.txPreambleSysEventA or currentService.service.txPreambleSysEventB
+        in TXMode and according to currentService.service.rssiSysConf in RXModes
+    \li reenables the SPI Interrupt Only to avoid a blocking of the SPI - ISR.
+
+    \return none
+
+    \image html ATA_rssiPreambleFifoFillLevelReached_ASM.png
+    \image rtf ATA_rssiPreambleFifoFillLevelReached_ASM.png
+    \n
+*/
+/*---------------------------------------------------------------------------*/
+#pragma vector=SFFLR_vect
+RSEG CODE:CODE:ROOT(1)
+ATA_rssiPreambleFifoFillLevelReached_ASM:
+    PUSH R30                        ; Store R30
+    PUSH R31                        ; Store R31
+    IN   R30 , SREG                 ; Load SREG
+    PUSH R30                        ; Store SREG
+
+    SBI  MCUCR , SPIIO              ; enable SPI only interrupt
+    SEI                             ; re-enable IRQs
+
+    ; check for subchanneling
+    LDS  R30 , subChan + SUBCHANNELING_FLAGS
+    SBRS R30 , SUBCHANNELING_ACTIVE
+    RJMP SFFLR_NO_SUBCHANNELING
+
+    ; disable interrupt if subchanneling is currently executed -> fill level adjusted to 1
+    LDS  R31 , SFI
+    CBR  R31 , BM_SFFLIM
+    STS  SFI , R31
+
+    ; set RSSI FIFO fill level reached flag
+    SBR  R30 , BM_SUBCHANNELING_RSSI_FIFO_FILL_LEVEL_REACHED
+    STS  subChan + SUBCHANNELING_FLAGS , R30
+    RJMP SFFLR_SKIP_SET_EVENT_PIN   ; no event generation during subchanneling
+
+SFFLR_NO_SUBCHANNELING:
+    ; events_system |= BM_EVENTS_SYSTEM_RSSI_BUF;
+    SET
+    BLD  R15 , EVENTS_SYSTEM_RSSI_BUF   ; SBR only works with R16 - R31
+
+    ; check for TXMode(PREAMBLE) or RXMode(RSSI)
+    LDS  R30 , SFC
+    SBRS R30 , SFDRA
+    RJMP SFFLR_RXMODE
+
+    LDS  R31 , currentService + SERVICE_TXPREAMBLESYSEVENTA
+
+    ; if( trxConf.serviceChannelConfig & BM_SVC_CH_CONFIG_PATHA )
+    LDS  R30 , trxConf + TRXCONF_SERVICE_CHANNEL_CONFIG
+    SBRS R30 , TRXCONF_SERVICE_CHANNEL_CONFIG_ENA_PATHA
+    LDS  R31 , currentService + SERVICE_TXPREAMBLESYSEVENTB
+
+    ; if( currentService.service.txPreambleSysEventX & BM_SERVICE_TXSYSEVENTB_TXBUF_EVENT_MASK )
+    SBRC R31 , SERVICE_TXPREAMBLESYSEVENT_TXPREAMBLEBUF_EVENT_MASK
+    RJMP SFFLR_SET_EVENT_PIN
+    RJMP SFFLR_SKIP_SET_EVENT_PIN
+
+SFFLR_RXMODE:
+    ; if( currentService.service.rssiSysConf & BM_SERVICE_RSSISYSCONF_RSSI_BUF_EVENT_MASK )
+    LDS  R30 , currentService + SERVICE_RSSISYSCONF
+    SBRS R30 , SERVICE_RSSISYSCONF_RSSI_BUF_EVENT_MASK
+    RJMP SFFLR_SKIP_SET_EVENT_PIN
+
+SFFLR_SET_EVENT_PIN:
+    CALL ATA_setEventPin_ASM
+
+SFFLR_SKIP_SET_EVENT_PIN:
+    POP  R30                        ; LoadR30
+    OUT  SREG , R30                 ; Restore SREG
+    CBI  MCUCR , SPIIO              ; disable SPI only interrupt
+    POP  R31                        ; LoadR31
+    POP  R30                        ; LoadR30
+    RETI                            ; Return from the interrupt
+
+    END

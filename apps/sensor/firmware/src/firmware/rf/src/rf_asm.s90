@@ -1,0 +1,338 @@
+/* *ASM************************************************************************
+  Use of this software is subject to Atmel's Software License Agreement.
+-------------------------------------------------------------------------------
+  $URL: http://svnservulm.corp.atmel.com/svn/CDB/Apps/Apps_SW/Trunk/SW_Projects/XC8/ATA8510_FLASH_XC8/src/firmware/rf/src/rf_asm.s90 $
+  $LastChangedRevision: 648718 $
+  $LastChangedDate: 2021-10-27 15:12:44 +0200 (Mi, 27 Okt 2021) $
+  $LastChangedBy: gwillbol $
+-------------------------------------------------------------------------------
+  Project:      ATA5831
+  Target MCU:   ATA5831
+  Compiler:     IAR Assembler for AVR 5.51.0
+-------------------------------------------------------------------------------
+
+******************************************************************************
+* Copyright 2011, Atmel Automotive GmbH                                       *
+*                                                                             *
+* This software is owned by the Atmel Automotive GmbH                         *
+* and is protected by and subject to worldwide patent protection.             *
+* Atmel hereby grants to licensee a personal,                                 *
+* non-exclusive, non-transferable license to copy, use, modify, create        *
+* derivative works of, and compile the Atmel Source Code and derivative       *
+* works for the sole purpose of creating custom software in support of        *
+* licensee product to be used only in conjunction with a Atmel integrated     *
+* circuit as specified in the applicable agreement. Any reproduction,         *
+* modification, translation, compilation, or representation of this           *
+* software except as specified above is prohibited without the express        *
+* written permission of Atmel.                                                *
+*                                                                             *
+* Disclaimer: ATMEL MAKES NO WARRANTY OF ANY KIND,EXPRESS OR IMPLIED,         *
+* WITH REGARD TO THIS MATERIAL, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED    *
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.         *
+* Atmel reserves the right to make changes without further notice to the      *
+* materials described herein. Atmel does not assume any liability arising     *
+* out of the application or use of any product or circuit described herein.   *
+* Atmel does not authorize its products for use as critical components in     *
+* life-support systems where a malfunction or failure may reasonably be       *
+* expected to result in significant injury to the user. The inclusion of      *
+* Atmel products in a life-support systems application implies that the       *
+* manufacturer assumes all risk of such use and in doing so indemnifies       *
+* Atmel against all charges.                                                  *
+*                                                                             *
+* Use may be limited by and subject to the applicable Atmel software          *
+* license agreement.                                                          *
+*******************************************************************************/
+/* \file rf_asm.s90
+    This file contains assembler optimized functions for TXMode, RXMode ...
+*/
+    NAME rf_asm
+
+
+    PUBLIC  ATA_setRxActive_ASM
+    PUBLIC  ATA_clrRxActive_ASM
+    PUBLIC  ATA_setSystemError_ASM
+    PUBLIC  ATA_switchIdleXTO_ASM
+
+    PUBLIC  ATA_dataFifoOverUnderFlowHandler_ASM
+    PUBLIC  ATA_rssiPreambleFifoOverUnderFlowHandler_ASM
+
+    EXTERN  ATA_clkSwitchXTO_ASM
+    EXTERN  ATA_setEventPin_ASM
+    EXTERN  ATA_eepRDbyte_ASM
+
+    EXTERN events
+    EXTERN facLock
+    EXTERN currentService
+    EXTERN eepTrxConf
+    EXTERN debug
+
+
+/* ===========================================================================*/
+/*   INCLUDES                                                                 */
+/* ===========================================================================*/
+#include "globals.h"
+#include "regs.inc"
+#include "rf.h"
+#include "eep.h"
+
+/* ===========================================================================*/
+/*   DEFINES                                                                  */
+/* ===========================================================================*/
+/* ===========================================================================*/
+/*   Modul Globals                                                            */
+/* ===========================================================================*/
+/* ===========================================================================*/
+/*   IMPLEMENTATION                                                           */
+/* ===========================================================================*/
+
+/* ----------------------------------------------------------------------------- */
+/** \brief <b>ATA_switchIdleXTO_ASM</b>
+    starts the XTO of the system and enables the AVCC and LOWBATT interrupts
+    according to the EEPROM setting in eepTrxConf.sysConfig[1..0]
+
+    \return none
+
+    \image html ATA_switchIdleXTO_ASM.png
+    \image rtf ATA_switchIdleXTO_ASM.png
+    \n
+*/
+/* ----------------------------------------------------------------------------- */
+RSEG CODE:CODE:ROOT(1)
+ATA_switchIdleXTO_ASM:
+
+    ; AVCC already enabled including 100us wait time
+    LDI     R30 , (BM_AVCCRF | BM_AVCCLF)
+    STS     SUPFR ,R30
+
+    LDI     R17 , high(eepTrxConf + EEP_TRXCONFIG_SYSCONFIG)   ; setup Address for EEP read
+    LDI     R16 , low(eepTrxConf + EEP_TRXCONFIG_SYSCONFIG)
+    CALL    ATA_eepRDbyte_ASM           ; result is placed in R16
+
+    LDS     R30 , SUPCR                     ; Load SUPCR
+
+    SBRS    R16 , EEP_TRXCONF_SYSCONFIG_AVCCCONFIG_LOWBATT_DISABLE
+    ORI     R30 , BM_AVCCRM                 ; Set AVCCRM
+
+    SBRS    R16 , EEP_TRXCONF_SYSCONFIG_AVCCCONFIG_AVCCLOW_DISABLE
+    ORI     R30 , BM_AVCCLM                 ; Set AVCCLM
+
+    STS     SUPCR , R30                     ; Store SUPCR
+
+    LDS     R30 , FEEN1
+    SBRC    R30 , XTOEN
+    RJMP    SKIP_FETN4_SETTING
+
+    ; write FETN4 register
+    LDS     R30 , facLock + FACLOCK_CONF_FETN4
+    STS     FETN4 , R30
+SKIP_FETN4_SETTING:
+
+    ; enable XTO, write FEEN1 register
+    LDS     R30 , FEEN1
+    ORI     R30 , BM_XTOEN
+    STS     FEEN1 , R30
+
+    ; write FEAT register
+    LDS     R30 , currentService + SERVICE_FEAT
+    STS     FEAT , R30
+
+    ; write FEBT register ATTENTION=>Channel dependeant!
+    LDS     R30 , facLock + FACLOCK_CONF_FEBT
+    STS     FEBT , R30
+
+    ; Poll for XTO ready Flag
+POLLXTOAGAIN:
+    LDS     R30 , FESR
+    ANDI    R30 , BM_XRDY
+    CPI     R30 , 0x00
+    BREQ    POLLXTOAGAIN
+
+    ; switch AVR Core clk to XTO/4
+    CALL    ATA_clkSwitchXTO_ASM
+
+    ; write FELNA register
+    LDS     R30 , facLock + FACLOCK_CONF_FELNA
+    STS     FELNA , R30
+
+    ; write FEPAC register
+    LDS     R30 , currentService + SERVICE_FEPAC
+    STS     FEPAC , R30
+
+    RET
+
+/* ----------------------------------------------------------------------------- */
+/**  \brief <b>ATA_setRxActive_ASM</b>
+    sets the RX_ACTIVE pin (PB7) according to the settings in
+    variable events.sysEventConf
+
+    \return none
+
+    \image html ATA_setRxActive_ASM.png
+    \image rtf ATA_setRxActive_ASM.png
+    \n
+ */
+/* ----------------------------------------------------------------------------- */
+RSEG CODE:CODE:ROOT(1)
+ATA_setRxActive_ASM:
+    LDS     R30 , events + EVENT_SYS_EVENT_MASK
+    SBRS    R30 , SYS_EVENT_CONFIG_RX_ACTIVE_EN
+    RJMP    NO_SET_RX_ACTIVE_ACTION
+
+    LDS     R30 , events + EVENT_SYS_EVENT_MASK
+    SBRS    R30 , SYS_EVENT_CONFIG_RX_ACTIVE_POL
+    RJMP    SET_RX_ACTIVE_LOW
+SET_RX_ACTIVE_HIGH:
+    SBI     PORTB , BIT_7
+    RJMP    NO_SET_RX_ACTIVE_ACTION
+
+SET_RX_ACTIVE_LOW:
+    CBI     PORTB , BIT_7
+
+NO_SET_RX_ACTIVE_ACTION:
+
+    RET
+
+/* ----------------------------------------------------------------------------- */
+/** \brief <b>ATA_clrRxActive_ASM</b>
+    clears the RX_ACTIVE pin (PB7) according to the settings in
+    variable events.sysEventConf
+
+    \return none
+
+    \image html ATA_clrRxActive_ASM.png
+    \image rtf ATA_clrRxActive_ASM.png
+    \n
+*/
+/* ----------------------------------------------------------------------------- */
+RSEG CODE:CODE:ROOT(1)
+ATA_clrRxActive_ASM:
+    LDS     R30 , events + EVENT_SYS_EVENT_MASK
+    SBRS    R30 , SYS_EVENT_CONFIG_RX_ACTIVE_EN
+    RJMP    NO_CLR_RX_ACTIVE_ACTION
+
+    LDS     R30 , events + EVENT_SYS_EVENT_MASK
+    SBRS    R30 , SYS_EVENT_CONFIG_RX_ACTIVE_POL
+    RJMP    CLR_RX_ACTIVE_LOW
+CLR_RX_ACTIVE_HIGH:
+    CBI     PORTB , BIT_7
+    RJMP    NO_CLR_RX_ACTIVE_ACTION
+
+CLR_RX_ACTIVE_LOW:
+    SBI     PORTB , BIT_7
+
+NO_CLR_RX_ACTIVE_ACTION:
+
+    RET
+
+
+/* ----------------------------------------------------------------------------- */
+/** \brief <b>ATA_setSystemError_ASM</b>
+    sets the SYS_ERR flag in event byte system. The Event pin is
+    set according to the settings in variable events.sysEventConf
+
+    \return none
+
+    \image html ATA_setSystemError_ASM.png
+    \image rtf ATA_setSystemError_ASM.png
+    \n
+*/
+/* ----------------------------------------------------------------------------- */
+RSEG CODE:CODE:ROOT(1)
+ATA_setSystemError_ASM:
+    LDI     R30 , BM_EVENTS_SYSTEM_SYS_ERR
+    OR      R15 , R30
+
+    LDS     R30 , events + EVENT_SYS_EVENT_MASK
+    SBRC    R30 , SYS_EVENT_CONFIG_SYS_ERR
+    CALL    ATA_setEventPin_ASM
+    RET
+
+/* ----------------------------------------------------------------------------- */
+/** \brief <b>ATA_dataFifoOverUnderFlowHandler_ASM</b>
+    is used as interrupt service routine for over-/underflow IRQ of data fifo.
+    The interrupt is disabled, error code DEBUG_ERROR_CODE_DFIFO_OVER_UNDER_FLOW
+    ist set in debug.errorCode and a system error is signaled.
+
+    \return none
+
+    \image html ATA_dataFifoOverUnderFlowHandler_ASM.png
+    \image rtf ATA_dataFifoOverUnderFlowHandler_ASM.png
+    \n
+*/
+/* ----------------------------------------------------------------------------- */
+#pragma vector=DFOUE_vect
+RSEG CODE:CODE:ROOT(1)
+ATA_dataFifoOverUnderFlowHandler_ASM:
+
+    PUSH    R30
+    PUSH    R31
+    IN      R30 , SREG
+    PUSH    R30
+
+    SBI     MCUCR , SPIIO           ; enable SPI only interrupt
+    SEI
+
+    LDS     R30 , DFI               ; disable IRQ mask
+    CBR     R30 , BM_DFERIM
+    STS     DFI , R30
+
+
+    LDI     R30 , DEBUG_ERROR_CODE_DFIFO_OVER_UNDER_FLOW    ; set debug code
+    STS     debug , R30
+    CLR     R30
+    STS     debug + DEBUG_SSM_ERROR_CODE, R30
+
+    CALL    ATA_setSystemError_ASM          ; set system error
+
+    POP     R30
+    OUT     SREG , R30
+    CBI     MCUCR , SPIIO           ; disable SPI only interrupt
+    POP     R31
+    POP     R30
+    RETI
+
+
+/* ----------------------------------------------------------------------------- */
+/** \brief <b>ATA_rssiPreambleFifoOverUnderFlowHandler_ASM</b>
+    is used as interrupt service routine for over-/underflow IRQ of sfifo
+    The interrupt is disabled, error code DEBUG_ERROR_CODE_SFIFO_OVER_UNDER_FLOW
+    ist set in debug.errorCode and a system error is signaled.
+
+    \return none
+
+    \image html ATA_rssiPreambleFifoOverUnderFlowHandler_ASM.png
+    \image rtf ATA_rssiPreambleFifoOverUnderFlowHandler_ASM.png
+    \n
+*/
+/* ----------------------------------------------------------------------------- */
+#pragma vector=SFOUE_vect
+RSEG CODE:CODE:ROOT(1)
+ATA_rssiPreambleFifoOverUnderFlowHandler_ASM:
+
+    PUSH    R30
+    PUSH    R31
+    IN      R30 , SREG
+    PUSH    R30
+
+    SBI     MCUCR , SPIIO           ; enable SPI only interrupt
+    SEI
+
+    LDS     R30 , SFI               ; disable IRQ mask
+    CBR     R30 , BM_SFERIM
+    STS     SFI , R30
+
+    LDI     R30 , DEBUG_ERROR_CODE_SFIFO_OVER_UNDER_FLOW    ; set debug code
+    STS     debug , R30
+    CLR     R30
+    STS     debug + DEBUG_SSM_ERROR_CODE, R30
+
+    CALL    ATA_setSystemError_ASM          ; set system error
+
+    POP     R30
+    OUT     SREG , R30
+    CBI     MCUCR , SPIIO          ; disable SPI only interrupt
+    POP     R31
+    POP     R30
+    RETI
+
+    END
