@@ -1,5 +1,5 @@
 /* ************************************************************************** */
-/** Descriptive File Name
+/* Descriptive File Name
 
   @Company
     Company Name
@@ -14,6 +14,10 @@
     Describe the purpose of this file.
  */
 /* ************************************************************************** */
+
+/** \file states_alarm.c
+ * functions for alarm state machine.
+ */
 
 /* ************************************************************************** */
 /* ************************************************************************** */
@@ -43,41 +47,7 @@
 // Section: Interface Functions                                               */
 /* ************************************************************************** */
 /* ************************************************************************** */
-void STATE_Alarm(sMSG_T *p_msg) {
-    /*
-     * Set ATA8510 System Mode (RX buffered, Service 0, Channel 0, Path A)
-     */
-    sCommandPartReqResp_T resp = {
-        .hdr = {
-            .id = app_data.device_id,
-            .msg = ACK_MSG,
-            .sta = {
-                .bmz_update = 0,
-                .accept_device = 0,
-                .clear_blocked_list = 0,
-                .payload = 0,
-                .security = 0,  // TODO: define SECURITY_OFF/SECURITY_ON
-                .okay = 0,
-                .network = 0,
-                .battery = 0,
-            },
-        },
-    };
 
-    RF_SetTxModeBuffered(sizeof(resp), (uint8_t *)&resp);
-
-    STATE_SwitchState(STATE_ALARM_TX_ACK_MSG_COMPLETE);
-}
-
-void STATE_AlarmTxAckMsgComplete (sMSG_T *p_msg) { 
-    if (p_msg->id == MSG_ID_RF_IRQ) {
-        //  TODO: Check for system error !!!
-        if ( rf_data.events.events.eota == 1 ) {
-            RF_SetIdleMode();
-            STATE_SwitchState(STATE_IDLE);
-        }
-    }
-}
 
 /* *****************************************************************************
  End of File

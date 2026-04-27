@@ -59,7 +59,7 @@ sSensor_T *APPLICATION_GetSensor(sDeviceId_T id) {
             return &sensor_array[i];
         }
     }
-    APPLICATION_ASSERT(p_sens != NULL, "Unknown Sensor");
+    // APPLICATION_ASSERT(p_sens != NULL, "Unknown Sensor");
     return NULL;
 }
 
@@ -94,21 +94,17 @@ uint8_t APPLICATION_GetNumberOfSensors(void) {
 }
            
 void APPLICATION_StatusTimer(uintptr_t context) { 
-    sMSG_T msg;
-    msg.id = MSG_ID_SEND_STATUS;
-    xQueueSend(app_data.msg_queue, &msg, 0);     
+    // APPLICATION_SendStatus();
 }
-
-// --GW-- volatile bool do_sync = false;
-// --GW-- volatile uint8_t slot = 0;
 
 void APPLICATION_SensorSlotTimer(uintptr_t context) {
 
     app_data.sensor_slot++;
     app_data.sensor_slot %= NUMBER_OF_SENSORS;
+    app_data.slot_time_stamp[app_data.sensor_slot] = SYS_TIME_CounterGet();
 
     if (app_data.state == STATE_KEEP_ALIVE_TX_ACK ){
-        sMSG_T msg;
+        sMsg_T msg;
         msg.id = MSG_ID_SENSOR_SLOT_TIMER;
         xQueueSend(app_data.msg_queue, &msg, 0);     
     }
@@ -132,10 +128,7 @@ void APPLICATION_SensorSlotTimer(uintptr_t context) {
 /* ************************************************************************** */
 void APPLICATION_Initialize(void)
 {
-    app_data.msg_queue = xQueueCreate(MSG_QUEUE_SIZE, sizeof(sMSG_T));
-
-    /* command initialize */
-    COMMAND_Initialize();
+    app_data.msg_queue = xQueueCreate(MSG_QUEUE_SIZE, sizeof(sMsg_T));
     
     /* console interface */
     CONSOLE_Initialize();
@@ -143,24 +136,21 @@ void APPLICATION_Initialize(void)
     RF_Initialize();
     
     TEST_Initialize();
-    
+
     STATES_Initialize();
     /* init sensors */
     for (int i=0; i<NUMBER_OF_SENSORS; i++) {
         sensor_array[i].id.raw = INVALID_SENSOR_ID;
     }
-   
-    /* TODO: Add Implementation */
+    
 }
 
 void APPLICATION_Tasks(void)
 {
-    sMSG_T msg;
+    sMsg_T msg;
     if ( xQueueReceive(app_data.msg_queue, &msg, (TickType_t)0) ) {
         RF_Tasks(&msg);
-        
-        COMMAND_Tasks(&msg);
-        
+                
         CONSOLE_Tasks(&msg);
         
         TEST_Tasks(&msg);
@@ -200,7 +190,11 @@ void APPLICATION_DelayMs(uint32_t delay_ms) {
         APPLICATION_DelayUs(1000);
     }
 }
-
+void APPLICATION_SendStatus(void) {
+    sMsg_T msg;
+    msg.id = MSG_ID_SEND_STATUS;
+    xQueueSend(app_data.msg_queue, &msg, 0); 
+}
 /** FreeRTOS Hook function */
 void vApplicationDaemonTaskStartupHook() 
 {

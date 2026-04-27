@@ -18,10 +18,10 @@
 #include "ata8510_curiosity.h"
 
 #include "common.h"
+#include "rtc.h"
 #include "keep_alive.h"
 #include "child_learn.h"
 #include "parent_learn.h"
-#include "alarm.h"
 
 /*===========================================================================*/
 /*  DEFINES                                                                  */
@@ -65,12 +65,12 @@ const VERSIONS_SECTION sFlashVersion_t flashVersion = {
 /** CSTACK used for IAR functions in ROM */
 int cstack[0x20];
 uint8_t state;
-volatile uStatus_T status;
 sAppData_T app_data;
 
 /* Idle State */
 static void state_idle(void);
-
+/* Alarm State */
+static void state_alarm(void);
 /* Verification State */
 static void state_verification(void);
 /* Status Update State */
@@ -84,14 +84,14 @@ const fpVoidFuncVoid_T _state_table[] = {
     /* Idle State */
     state_idle,
     /* Keep Alive States */
-    state_keep_alive,
-    state_keep_alive_tx_ka_msg,
-    state_keep_alive_start_rx_ack,
-    state_keep_alive_rx_ack,
-    state_keep_alive_process_child_rx_ka_msg,
-    state_keep_alive_process_child_tx_ack_msg,
-    state_keep_alive_process_child_tx_ack_msg_complete,
-    state_keep_alive_sleep,
+    state_ka_cf,
+    state_ka_cf_process_child_rx_ka_msg,
+    state_ka_cf_process_child_tx_ack_msg,
+    state_ka_cf_process_child_tx_ack_msg_complete,
+    state_ka_cf_tx_ka_msg,
+    state_ka_cf_start_rx_ack,
+    state_ka_cf_rx_ack,
+    state_ka_cf_sleep,
     /* Child Sensor Learn States */
     state_child_sensor_learn_tx_part_req,
     state_child_sensor_learn_start_rx_part_req_resp,
@@ -102,26 +102,24 @@ const fpVoidFuncVoid_T _state_table[] = {
     /* Parent Sensor Learn States */
     state_parent_sensor_learn_start_rx_part_req,
     state_parent_sensor_learn_rx_part_req,
-        state_parent_sensor_learn_tx_con_ver_req,
-        state_parent_sensor_learn_start_rx_con_ver_resp,
-        state_parent_sensor_learn_rx_con_ver_resp,
+    state_parent_sensor_learn_tx_con_ver_req,
+    state_parent_sensor_learn_start_rx_con_ver_resp,
+    state_parent_sensor_learn_rx_con_ver_resp,
     state_parent_sensor_learn_tx_part_req_resp,
     state_parent_sensor_learn_tx_con_ver_stat,
     state_parent_sensor_learn_start_rx_ack_msg,
     state_parent_sensor_learn_rx_ack_msg,
-        state_parent_sensor_learn_tx_ud_msg,
-        state_parent_sensor_learn_start_rx_ack_msg_ud,
-        state_parent_sensor_learn_rx_ack_msg_ud,
+    state_parent_sensor_learn_tx_ud_msg,
+    state_parent_sensor_learn_start_rx_ack_msg_ud,
+    state_parent_sensor_learn_rx_ack_msg_ud,
     /* Reset Device ID */
     state_reset_device_id,
     /* Verification State */
     state_verification,
     /* Status Update State */
     state_status_update,
-    /* Alarm State */
+    /* Alarm state */
     state_alarm,
-    state_alarm_start_rx_ack_msg,
-    state_alarm_rx_ack_msg,
     /* Error State */
     state_error,
 };
@@ -139,6 +137,9 @@ int16_t main(void)
     MCUCR = 1 << IVCE;
     MCUCR = 1 << IVSEL;
 
+    uint8_t mcusr = MCUSR;
+    MCUSR = 0;
+
     API_checkWakeupSource_C();
     API_wdtDisable_C();
     API_setClk_C(1 << CLTPS0);	/* FRC for AVR core, Timer with FRC */
@@ -152,24 +153,22 @@ int16_t main(void)
     /* if EEPROM configuration is not valid goto endless loop and signal error */
     if(API_systemInit_C(ATA_portBisr_ASM, ATA_portCisr_ASM, (irqIntHandler)0x0000))
     {
-    	API_systemErrorLoop_C(DEBUG_ERROR_CODE_SYSTEM_ERROR_EEPROM_NOT_VALID);
+        API_systemErrorLoop_C(DEBUG_ERROR_CODE_SYSTEM_ERROR_EEPROM_NOT_VALID);
     }
     PORTC |= (1<<2);    // Out High as default for debug pattern pin
     
+    DDRB |= (1<<0);
+    PORTB &= ~(1<<0);
+    
+
     sAppData_T *p_eep_data = (sAppData_T *)ADDRESS_EEP_DATA;
-    eeprom_read_block (&app_data, p_eep_data, sizeof(sAppData_T));
-#if false
-    app_data.device_id = eeprom_read_word( &p_eep_data->device_id );
-    app_data.parent_id = eeprom_read_word( &p_eep_data->parent_id );
-    for (int i=0; i<NUMBER_OF_SENSORS;i++) {
-        app_data.child_id[i] = eeprom_read_word( &p_eep_data->child_id[i] );
-    }
-    app_data.ka_interval_correction = eeprom_read_word( (uint16_t *)&p_eep_data->ka_interval_correction );
-#endif
-
+    app_data.device_id = eeprom_read_word (&p_eep_data->device_id);
+    
     LED_GREEN_OFF();
-
-    if ( events_power & (1<<EVENTS_POWER_NPWRON1) ) {
+    
+    SWITCH_STATE(STATE_IDLE);
+    
+    if ( (events_power & (1<<EVENTS_POWER_NPWRON1)) && (mcusr & (1<<EXTRF)) ) {
         if ( app_data.device_id == 0xFFFF ) {
             /* Child Learn */
             SWITCH_STATE(STATE_CHILD_SENSOR_LEARN_TX_PART_REQ);
@@ -177,14 +176,13 @@ int16_t main(void)
             /* Parent Learn */
             SWITCH_STATE(STATE_PARENT_LEARN_START_RX_PART_REQ);
         }
-        while(!(PINC & 1<<PINC1));  // wait until user switch is released
+        do {
+            PINC = (1<<2);
+        } while(!(PINC & 1<<PINC1));  // wait until user switch is released
         
+    } else if (events_power & (1<<EVENTS_POWER_NPWRON1)) {
+        SWITCH_STATE(STATE_ALARM);
     } else {
-        if (app_data.device_id == 0xFFFF ) {
-            SWITCH_STATE(STATE_IDLE);
-        } else {
-            SWITCH_STATE(STATE_KEEP_ALIVE);
-        }
     }
     
     for(;;)
@@ -212,8 +210,8 @@ int16_t main(void)
             API_systemFlowCtrl_C();
         }        
 
-        if ( IS_KEEP_ALIVE_STATE() || IS_ALARM_STATE() || IS_LEARN_STATE() ){
-            // No Sleep in case of Alarm State !!!
+        if ( IS_IDLE_STATE() || IS_KEEP_ALIVE_STATE() || IS_LEARN_STATE() ){
+            /** \todo Check for sleep mode condition */
         } else {
             API_SleepMode_C();
         }
@@ -259,6 +257,32 @@ uint8_t add_child_sensor(uint16_t id) {
 
 static void state_idle(void) {
     /* DO NOTHING */
+    app_data.status.t4_comp_int = 0;
+
+    rtc_init();
+
+    APPLY_ALARM_TO_LED();
+    
+    SWITCH_STATE(STATE_KA_CF);
+    
+}
+static void state_alarm(void) {
+    /* Wake Up from Power Off due to button press == ALARM */
+    do {
+        DBG_PATTERN8(0xCC);
+    } while (PINC & (1<<PINC4));   // wait for MFP of RTC == low()
+
+    rtc_init();
+
+    app_data.status.bmz_update = 1; // signal change
+    if (app_data.status.alarm == ALARM_OFF) {
+        app_data.status.alarm = ALARM_ON;
+    } else {
+        app_data.status.alarm = ALARM_OFF;
+    }
+    APPLY_ALARM_TO_LED();
+
+    SWITCH_STATE(STATE_KA_CF);
 }
 
 
@@ -277,3 +301,4 @@ static void state_error(void) {
     for (int i=0; i<10; i++) { _NOP; }
     PINC = 1<<2;
 }
+

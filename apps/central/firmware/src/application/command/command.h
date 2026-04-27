@@ -65,6 +65,17 @@ extern "C" {
         PAY_MSG = 0x0E, /**< Payload message id */
         NUM_MSGS    /**< Number of message id's */
     } eMsg_T;
+    /** typedef for alarm state */
+    typedef enum {
+        ALARM_OFF = 0,  /**< alarm is off */
+        ALARM_ON = 1    /**< alarm is on  */
+    } eAlarm_T;
+    /** enumeration for security bit in sStatus_T
+     */
+    typedef enum {
+        SECURITY_OFF = 0,   /**< Security NOT used for next communication */
+        SECURITY_ON = 1 /**< Security used for next communication */
+    } eSecurity_T;
 
     /** data structure containing the sensor status */
     struct sStatus {
@@ -77,8 +88,9 @@ extern "C" {
                                          * devices to stay in receive mode waiting
                                          * for response from BMZ
                                          */
-                uint8_t accept_device : 1;  /**< Bit 1: \todo Add Description */
-                uint8_t clear_blocked_list : 1; /**< Bit 2: \todo Add Description */
+                uint8_t accept_device : 1;  /**< Bit 1: used in CON_VER_RESP, 1=device accepted, otherwise device ignored  */
+                uint8_t alarm : 1;      /**< Bit 2: ALARM: If this bit is set to 1,
+                                         * Alarm is ON in the network. */
                 uint8_t payload : 1;    /**< Bit 3: Payload: If this bit ist set to 1, 
                                          * it indicates there is more to communicate
                                          * required and a payload message will be 
@@ -118,8 +130,6 @@ extern "C" {
     struct sCommandNoPayload {
         sCommandHeader_T hdr;   /**< command header */
     }__PACKED;
-    /** typedef for ::sCommandNoPayload */
-    typedef struct sCommandNoPayload sCommandPartReqResp_T;    
     
     /*
      * KA_MSG
@@ -165,10 +175,18 @@ extern "C" {
     /*
      * PART_REQ
      */
+
+    /** enumeration for device type of 'PART_REQ' command
+     */
+    typedef enum {
+        DEVICE_TYPE_UNKNOWN = 0,   /**< unknown device */
+        DEVICE_TYPE_ATA8510,   /**< ATA8510 device */
+        NUMBER_OF_DEVICE_TYPES  /**< number of supported device types */
+    } eDeviceType_T;
     /** data structure for command 'PART_REQ' */
     struct sCommandPartReq {
         sCommandHeader_T hdr;   /**< command header */
-        uint8_t device_type;    /**< device type \todo create enum for device_type */
+        eDeviceType_T device_type;    /**< device type of the sensor device */
     }__PACKED;
     /** typedef for ::sCommandPartReq */
     typedef struct sCommandPartReq sCommandPartReq_T;
@@ -176,6 +194,13 @@ extern "C" {
     /*
      * PART_REQ_RESP
      */
+    /** data structure for command 'PART_REQ_RESP' */
+    struct sCommandPartReqResp {
+        sCommandHeader_T hdr;   /**< command header */
+        uint8_t count;  /**< KA message counter (modulo 10) */
+    }__PACKED;
+    /** typedef for ::sCommandPartReqResp */
+    typedef struct sCommandPartReqResp sCommandPartReqResp_T;    
 
     /*
      * MEM_KEY
@@ -193,21 +218,11 @@ extern "C" {
      * The connection status contains a time base for regular communication and the 
      * actual number of nodes within the level (of the new connected device)
      */
-    /** data structure for payload of command 'CON_VER_STA' */
-    struct sConVerSta {
-        union {
-            uint16_t tick_cnt : 12;  /**< \todo add content */
-            uint16_t number_of_nodes : 4;  /**< \todo add content */
-        };
-        uint16_t raw;   /**< 16-bit raw value */
-    }__PACKED;
-    /** typedef for ::sConVerSta */
-    typedef struct sConVerSta sConVerSta_T;
 
     /** data structure for command 'CON_VER_STA' */
     struct sCommandConVerSta {
         sCommandHeader_T hdr;   /**< header */
-        sConVerSta_T status;    /**< payload/status */
+        uint16_t status;    /**< payload/status */
     }__PACKED;
     /** typedef for structure ::sCommandConVerSta */
     typedef struct sCommandConVerSta sCommandConVerSta_T;
@@ -240,17 +255,8 @@ extern "C" {
     // Section: Interface Functions
     // *****************************************************************************
     // *****************************************************************************
-    /**
-     * Command module initialization routine
-     */
-    extern void COMMAND_Initialize(void);
-    /**
-     * Command module main routine
-     * @param p_msg message handle to parse in command module main routine
-     */
-    extern void COMMAND_Tasks(sMSG_T *p_msg);
 
-
+    
     /* Provide C++ Compatibility */
 #ifdef __cplusplus
 }

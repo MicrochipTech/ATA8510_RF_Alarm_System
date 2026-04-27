@@ -78,7 +78,6 @@ typedef enum
     /* Application's state machine's initial state. */
     APP_STATE_INIT=0,   /**< Application's state machine's initial state. */
     APP_STATE_SERVICE_TASKS,    /**< Application's state machine's idle state.*/
-    /* TODO: Define states used by the application state machine. */
 
 } APP_STATES;
 
@@ -106,7 +105,6 @@ typedef struct
     /* The application's current state */
     APP_STATES state;   /**< The application's current state */
 
-    /* TODO: Define any additional data used by the application. */
 
 } APP_DATA;
 

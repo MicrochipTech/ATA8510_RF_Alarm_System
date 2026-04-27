@@ -11,13 +11,14 @@ Features: **| RF network topology |**
 
 ## ⚠ Disclaimer <!-- omit in toc -->
 
-<p><span style="color:red"><b>
-THE SOFTWARE ARE PROVIDED "AS IS" AND GIVE A PATH FOR SELF-SUPPORT AND SELF-MAINTENANCE. This repository contains example code intended to help accelerate client product development. </br>
-
+<b>
+THE SOFTWARE ARE PROVIDED "AS IS" AND GIVE A PATH FOR SELF-SUPPORT AND SELF-MAINTENANCE. This repository contains example code intended to help accelerate client product development.  
+<br>
+<br>
 For additional Microchip repos, see: <a href="https://github.com/Microchip-MPLAB-Harmony" target="_blank">https://github.com/Microchip-MPLAB-Harmony</a>
-
+<br>
 Checkout the <a href="https://microchipsupport.force.com/s/" target="_blank">Technical support portal</a> to access our knowledge base, community forums or submit support ticket requests.
-</span></p></b>
+</b>
 
 ## Contents<!-- omit in toc -->
 - [Introduction](#introduction)
@@ -31,9 +32,6 @@ Checkout the <a href="https://microchipsupport.force.com/s/" target="_blank">Tec
       - [Removing a Sensor from the Network](#removing-a-sensor-from-the-network)
     - [Network Communication](#network-communication)
       - [Status Update](#status-update)
-        - [Slotting](#slotting)
-        - [Synchronization](#synchronization)
-        - [Sensor Calibration](#sensor-calibration)
       - [Alarm](#alarm)
 - [Implementation](#implementation)
   - [Protocols](#protocols)
@@ -57,10 +55,10 @@ Checkout the <a href="https://microchipsupport.force.com/s/" target="_blank">Tec
 
 Application details, such as state machines and flowcharts, are available in the respective project documentation.
 
-| Projects                                             | Devices                                          |
-| :----------------------------------------------------| :------------------------------------------------|
-| [Central device](./central/readme.md) | SAMC21 + MikroBUS Xpro + ATA8510 Curiosity Board |
-| [Sensor device](./sensor/readme.md)    | ATA8510 Curiosity Board                          |
+Projects                              | Devices
+--                                    |--
+[Central device](./central/README.md) | SAMC21 + MikroBUS Xpro + ATA8510 Curiosity Board
+[Sensor device](./sensor/README.md)   | ATA8510 Curiosity Board
 
 [TOP](#contents)
 
@@ -199,64 +197,6 @@ The following sequence charts illustrate the status update communication between
 
 </p>
 
-###### Slotting
-To prevent sensor status updates from interfering with communication from other sensors on the same level, each sensor is assigned its own communication slot.
-
-<img src="images/sensor_slots.png" width="1200"/>
-
-**Example:**<br>
-If the update period is 1 second and there are a maximum of 5 sensors at each level, this results in a communication slot of 200 ms for each sensor in sensor level 1.
-
-Accordingly, for 2 sensors (S1 and S2) on level #1 and the central device:
-
-Each sensor is assigned a 200 ms communication slot within the 1-second update period. For example, S1 may transmit its status update in the first 200 ms slot, while S2 transmits in the next 200 ms slot. The central device receives and acknowledges each sensor’s message within its assigned slot, ensuring organized and collision-free communication.
-
-<p align="center">
-
-| <img src="images/c_s1_s2.png" width="200"> | &nbsp;&nbsp;&nbsp;&nbsp; | <img src="images/ka_c_s1_s2.png" width="300"> |
-|----------------------------------------|-------------------------|------------------------------------------|
-
-</p>
-
-###### Synchronization
-To achieve synchronized communication within the network, sensors should be able to adjust the timing of their keep-alive messages. This adjustment must be triggered by the parent device.
-
-The parent device can:
-
-- Reduce or extend the sleep/off time of the next cycle to shift the timing without changing the overall interval.
-- Reduce or extend the sleep/off time of subsequent cycles to synchronize the intervals of each child sensor device.
-
-This approach ensures that all sensors operate in coordinated time slots, minimizing communication collisions and maintaining efficient network performance.
-
-**Note**<br>
-The sycnhronization is implemented in the keep alive state machines. For a more detailed description refer to [Keep Alive](../apps/sensor/readme.md/#keep-alive) on sensor side and [Keep Alive](../apps/central/readme.md/#keep-alive) on central side.
-
-###### Sensor Calibration
-The timing for keep-alive messages is implemented using the Slow RC oscillator (SRC) as the clock input for the timer. The SRC frequency (f_src) is 125 kHz ± 10%, which introduces some variation in timing resolution.
-
-| f_src           | Frequency | Resolution |
-| --------------- | ----------| ---------- |
-| f_src (typical) | 125 kHz   | 8us        |
-| f_src (min)     | 112,5 kHz | 8.89us     |
-| f_src (max)     | 137,5 kHz | 7.27us     |
-
-This means the timer’s resolution, and thus the timing of keep-alive messages, can vary slightly depending on the actual frequency of the SRC oscillator.
-
-**Example**<br>
-For an interval time of 1 second, the application requires 125,000 cycles if the clock is running at the typical SRC frequency (f_src = 125 kHz).
-
-- Typical Frequency (125 kHz):
-125,000 cycles × 8 µs = 1 s
-- Minimum Frequency (112.5 kHz):
-125,000 cycles × 8.89 µs = 1.111 s (+111 ms)
-- Maximum Frequency (137.5 kHz):
-125,000 cycles × 7.27 µs = 909.1 ms (−90.9 ms)
-
-As a result, the timing slot can vary within a range of approximately 200 ms, depending on the actual frequency of the SRC oscillator.
-
-Conclusion To ensure accurate timing and reliable communication within the network, sensors must be calibrated using the available EEPROM settings. Proper calibration helps compensate for variations in the SRC oscillator frequency, allowing the sensors to maintain synchronized intervals and consistent performance.
-For detailed instructions and parameters, refer to the chapter on EEPROM configuration.
-
 ##### Alarm
 The alarm functionality allows the sensor to quickly notify the network of an alarm event. The alarm feature is activated by pressing the user switch on the ATA8510 Curiosity Board. This action triggers the sensor to send an AL_MSG message to the parent device immediately.
 
@@ -282,8 +222,8 @@ The learning procedure is required for all devices that wish to access the netwo
 - At the end of the learning process, the candidate is informed of the result with a connection verification status message (CON_VER_STA), indicating whether the central device has accepted or declined the new membership.
 
 **See also** <br>
-[Central device](./central/readme.md) <br>
-[Sensor device](./sensor/readme.md)
+[Central device](./central/README.md) <br>
+[Sensor device](./sensor/README.md)
 
 ##### Example Sequences
 
@@ -319,8 +259,8 @@ The learning procedure is required for all devices that wish to access the netwo
 This chapter explains the communication process between sensor and central applications while in the paired state, focusing on how status updates are exchanged to maintain network integrity and monitor device activity.
 
 **See also** <br>
-[Central device](./central/readme.md) <br>
-[Sensor device](./sensor/readme.md)
+[Central device](./central/README.md) <br>
+[Sensor device](./sensor/README.md)
 
 ##### Example Sequences
 
@@ -347,8 +287,8 @@ This chapter explains the communication process between sensor and central appli
 This chapter describes the alarm functionality, detailing how alarm events are triggered, communicated, and processed within the network.
 
 **See also** <br>
-[Central device](./central/readme.md) <br>
-[Sensor device](./sensor/readme.md)
+[Central device](./central/README.md) <br>
+[Sensor device](./sensor/README.md)
 
 ##### Example Sequences
 

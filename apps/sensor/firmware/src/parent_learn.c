@@ -20,6 +20,8 @@ static uint16_t _learn_id;
 /*===========================================================================*/
 
 void state_parent_sensor_learn_start_rx_part_req(void) {
+    rtc_init();
+    
     set_rx_mode();
     ENABLE_RX_TIMEOUT(10);
     SWITCH_STATE(STATE_PARENT_LEARN_RX_PART_REQ);
@@ -45,7 +47,6 @@ void state_parent_sensor_learn_rx_part_req(void) {
             /*
              * Wrong/Unexpected Command Received
              */
-            // SYSTEM_RESET();
             SWITCH_STATE(STATE_PARENT_LEARN_START_RX_PART_REQ);
         }
     } else if ( TIMER1_EXPIRED() ) {
@@ -53,7 +54,7 @@ void state_parent_sensor_learn_rx_part_req(void) {
          * 10s Timeout 
          */
         DISABLE_TIMER1();    
-        SYSTEM_RESET();
+        SWITCH_STATE(STATE_IDLE);
     } else {
         /*
          * Do Nothing
@@ -70,9 +71,9 @@ void state_parent_sensor_learn_tx_con_ver_req(void) {
                 .sta = {
                     .bmz_update = 0,
                     .accept_device = 0,
-                    .clear_blocked_list = 0,
+                    .alarm = ALARM_OFF,
                     .payload = 0,
-                    .security = 0,
+                    .security = SECURITY_OFF,
                     .okay = 0,
                     .network = 0,
                     .battery = 0
@@ -113,20 +114,20 @@ void state_parent_sensor_learn_rx_con_ver_resp(void) {
                 /*
                  * Wrong Device or Device not accepted
                  */
-                SYSTEM_RESET();
+                SWITCH_STATE(STATE_IDLE);
             }
         } else {
             /*
              * Wrong/Unexpected Command Received
              */
-            SYSTEM_RESET();
+            SWITCH_STATE(STATE_IDLE);
         }
     }else if ( TIMER1_EXPIRED() ) {
         /* 
          * 10s Timeout 
          */
         DISABLE_TIMER1();    
-        SYSTEM_RESET();
+        SWITCH_STATE(STATE_IDLE);
     }
 }
 
@@ -138,9 +139,9 @@ void state_parent_sensor_learn_tx_part_req_resp(void) {
                 .sta = {
                     .bmz_update = 0,
                     .accept_device = 1,
-                    .clear_blocked_list = 0,
+                    .alarm = ALARM_OFF,
                     .payload = 0,
-                    .security = 0,
+                    .security = SECURITY_OFF,
                     .okay = 0,
                     .network = 0,
                     .battery = 0
@@ -148,6 +149,7 @@ void state_parent_sensor_learn_tx_part_req_resp(void) {
             }
         };
         part_req_resp.hdr.id.raw = app_data.device_id;
+        part_req_resp.count = (app_data.count)%10;
         
         set_tx_mode((uint8_t *)&part_req_resp, sizeof(part_req_resp));
         SWITCH_STATE(STATE_PARENT_LEARN_TX_CON_VER_STAT);
@@ -169,9 +171,9 @@ void state_parent_sensor_learn_tx_con_ver_stat(void){
                 .sta = {
                     .bmz_update = 0,
                     .accept_device = 0,
-                    .clear_blocked_list = 0,
+                    .alarm = ALARM_OFF,
                     .payload = 0,
-                    .security = 0,
+                    .security = SECURITY_OFF,
                     .okay = 0,
                     .network = 0,
                     .battery = 0
@@ -204,13 +206,14 @@ void state_parent_sensor_learn_rx_ack_msg(void) {
         sCommandHeader_T *p_cmd_hdr = (sCommandHeader_T *)&tmpAryApp;
         if (p_cmd_hdr->msg == ACK_MSG) {
             /** \todo Decode Content */
-            sAppData_T *p_eep_data = (sAppData_T *)ADDRESS_EEP_DATA;
             // --NO-NEED-TO-UPDATE-- eeprom_write_word(&p_eep_data->device_id, ids.device_id);
             // --NO-NEED-TO-UPDATE-- eeprom_write_word(&p_eep_data->parent_id, ids.parent_id);
             add_child_sensor(_learn_id);
-            for (int i=0; i<NUMBER_OF_SENSORS; i++) {
-                eeprom_write_word(&p_eep_data->child_id[i], app_data.child_id[i]);
-            }
+            rtc_write_sram(
+                    RTC_SRAM_APP_DATA_CHILD_ID, 
+                    (uint8_t *)&app_data.child_id, 
+                    sizeof(app_data.child_id)
+                    );
             SWITCH_STATE(STATE_PARENT_LEARN_TX_UD_MSG);
         } else {
             // wrong command received
@@ -219,7 +222,7 @@ void state_parent_sensor_learn_rx_ack_msg(void) {
     } else if ( TIMER1_EXPIRED() ) {
         /* Timeout */
         DISABLE_TIMER1();    
-        SYSTEM_RESET();
+        SWITCH_STATE(STATE_IDLE);
     } else {
         // do nothing
     }
@@ -233,9 +236,9 @@ void state_parent_sensor_learn_tx_ud_msg(void) {
                 .sta = {
                     .bmz_update = 0,
                     .accept_device = 0,
-                    .clear_blocked_list = 0,
+                    .alarm = ALARM_OFF,
                     .payload = 0,
-                    .security = 0,
+                    .security = SECURITY_OFF,
                     .okay = 0,
                     .network = 0,
                     .battery = 0
@@ -272,10 +275,10 @@ void state_parent_sensor_learn_rx_ack_msg_ud(void) {
         sCommandHeader_T *p_cmd_hdr = (sCommandHeader_T *)&tmpAryApp;
         if (p_cmd_hdr->msg == ACK_MSG) {
 
-            ENABLE_TIMER4(2000); // ~1s
-            while (!TIMER4_EXPIRED());
-            
-            SYSTEM_RESET();
+            ENABLE_TIMER4_INT(2000); // ~1s
+            while(app_data.status.t4_comp_int == 0);
+
+            SWITCH_STATE(STATE_IDLE);
         } else {
             // wrong command received
             SWITCH_STATE(STATE_ERROR);
@@ -283,7 +286,7 @@ void state_parent_sensor_learn_rx_ack_msg_ud(void) {
     } else if ( TIMER1_EXPIRED() ) {
         /* Timeout */
         DISABLE_TIMER1();    
-        SYSTEM_RESET();
+        SWITCH_STATE(STATE_IDLE);
     } else {
         // do nothing
     }
@@ -296,13 +299,14 @@ void check_reset_device_id(void) {
 }
 
 void state_reset_device_id(void) {
-    
+    sAppData_T *p_eep_fac_data = (sAppData_T *)ADDRESS_EEP_FAC_DATA;
+    eeprom_read_block (&app_data, p_eep_fac_data, sizeof(sAppData_T));
+
+    rtc_write_app_data();
+
     sAppData_T *p_eep_data = (sAppData_T *)ADDRESS_EEP_DATA;
-    eeprom_write_word(&p_eep_data->device_id, INVALID_SENSOR_ID);
-    eeprom_write_word(&p_eep_data->parent_id, INVALID_SENSOR_ID);
-    for (int i=0; i<NUMBER_OF_SENSORS; i++) {
-        eeprom_write_word(&p_eep_data->child_id[i], INVALID_SENSOR_ID);
-    }
+    eeprom_write_word(&p_eep_data->device_id, app_data.device_id);
+
     while(!(PINC & 1<<PINC1));
-    SYSTEM_RESET();
+    SWITCH_STATE(STATE_IDLE);
 }

@@ -1,5 +1,5 @@
 /* ************************************************************************** */
-/** Descriptive File Name
+/* Descriptive File Name
 
   @Company
     Company Name
@@ -14,6 +14,10 @@
     Describe the purpose of this file.
  */
 /* ************************************************************************** */
+
+/** \file states.h
+ * include file for application state machine implementation. 
+ */
 
 #ifndef _STATES_H    /* Guard against multiple inclusion */
 #define _STATES_H
@@ -54,38 +58,35 @@ extern "C" {
     // *****************************************************************************
     // *****************************************************************************
     extern void STATES_Initialize(void);
-    extern void STATES_Tasks(sMSG_T *p_msg);
+    extern void STATES_Tasks(sMsg_T *p_msg);
     
-    extern void STATE_SwitchState(eAPPLICATION_STATE_T state);
+    extern void STATE_SwitchState(eAPPLICATION_STATE_T state, bool print_state);
 
-    extern void STATE_Init(sMSG_T *p_msg);
-    extern void STATE_WaitRfSysRdy(sMSG_T *p_msg);
+    extern void STATE_Init(sMsg_T *p_msg);
+    extern void STATE_WaitRfSysRdy(sMsg_T *p_msg);
     
-    extern void STATE_Idle(sMSG_T *p_msg);
+    extern void STATE_Idle(sMsg_T *p_msg);
     
-    extern void STATE_KeepAliveTxAck(sMSG_T *p_msg);
-    extern void STATE_KeepAliveTxAckComplete(sMSG_T *p_msg);
+    extern void STATE_KeepAliveTxAck(sMsg_T *p_msg);
+    extern void STATE_KeepAliveTxAckComplete(sMsg_T *p_msg);
     
-    extern void STATE_Learn(sMSG_T *p_msg);
-    extern void STATE_LearnRxPartReq(sMSG_T *p_msg);
-    extern void STATE_LearnTxPartReqResp(sMSG_T *p_msg);
-    extern void STATE_LearnTxPartReqRespComplete(sMSG_T *p_msg);
-    extern void STATE_LearnTxConVerStat(sMSG_T* p_msg);
-    extern void STATE_LearnTxConVerStatComplete(sMSG_T* p_msg);
-    extern void STATE_LearnRxAckMsg(sMSG_T* p_msg);
-    extern void STATE_LearnPass(sMSG_T *p_msg);
-    extern void STATE_LearnFail(sMSG_T *p_msg);
+    extern void STATE_Learn(sMsg_T *p_msg);
+    extern void STATE_LearnRxPartReq(sMsg_T *p_msg);
+    extern void STATE_LearnTxPartReqResp(sMsg_T *p_msg);
+    extern void STATE_LearnTxPartReqRespComplete(sMsg_T *p_msg);
+    extern void STATE_LearnTxConVerStat(sMsg_T* p_msg);
+    extern void STATE_LearnTxConVerStatComplete(sMsg_T* p_msg);
+    extern void STATE_LearnRxAckMsg(sMsg_T* p_msg);
+    extern void STATE_LearnPass(sMsg_T *p_msg);
+    extern void STATE_LearnFail(sMsg_T *p_msg);
     
-    extern void STATE_ConnectionVerificationTxConVerResp(sMSG_T* p_msg);
-    extern void STATE_ConnectionVerificationTxConVerRespComplete(sMSG_T* p_msg);
+    extern void STATE_ConnectionVerificationTxConVerResp(sMsg_T* p_msg);
+    extern void STATE_ConnectionVerificationTxConVerRespComplete(sMsg_T* p_msg);
     
-    extern void STATE_Alarm(sMSG_T *p_msg);
-    extern void STATE_AlarmTxAckMsgComplete (sMSG_T *p_msg);
+    extern void STATE_UpdateTxAck(sMsg_T* p_msg);
+    extern void STATE_UpdateTxAckComplete(sMsg_T* p_msg);
     
-    extern void STATE_UpdateTxAck(sMSG_T* p_msg);
-    extern void STATE_UpdateTxAckComplete(sMSG_T* p_msg);
-    
-    extern void STATE_Error(sMSG_T *p_msg);
+    extern void STATE_Error(sMsg_T *p_msg);
     
     
 

@@ -58,8 +58,6 @@ APP_DATA appData;
 // *****************************************************************************
 // *****************************************************************************
 
-/* TODO:  Add any necessary callback functions.
-*/
 
 // *****************************************************************************
 // *****************************************************************************
@@ -68,8 +66,6 @@ APP_DATA appData;
 // *****************************************************************************
 
 
-/* TODO:  Add any necessary local functions.
-*/
 
 
 // *****************************************************************************
@@ -93,9 +89,6 @@ void APP_Initialize ( void )
 
 
 
-    /* TODO: Initialize your application's state machine and other
-     * parameters.
-     */
     extern void APPLICATION_Initialize(void);
     APPLICATION_Initialize();
     
@@ -136,13 +129,11 @@ void APP_Tasks ( void )
             break;
         }
 
-        /* TODO: implement your application state machine.*/
 
 
         /* The default state should never be executed. */
         default:
         {
-            /* TODO: Handle error in application's state machine. */
             break;
         }
     }

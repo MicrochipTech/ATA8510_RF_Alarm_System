@@ -74,7 +74,7 @@ extern "C" {
         MSG_ID_CONSOLE_CMD_TEST, /**< 'test' command received */
         MSG_ID_RF_IRQ, /**< ATA8510 RF IRQ detected */
         NUM_MSG_IDS /**< number of message ids*/
-    } eMSG_ID_T;
+    } eMsgId_T;
     
     /** enum containing application states */
     typedef enum {
@@ -96,15 +96,12 @@ extern "C" {
         STATE_LEARN_RX_ACK_MSG, /**< Wait until command 'ACK_MSG' is received */
         STATE_LEARN_PASS,   /**< Learning successful */
         STATE_LEARN_FAIL,   /**< Learning failed */
-        /* ALARM*/
-        STATE_ALARM,    /**< Initial Alarm State */
-        STATE_ALARM_TX_ACK_MSG_COMPLETE,    /**< Wait for ATA8510 TX complete */
         /* CONNECTION VERIFICATION */
-                STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP,  /**< Send command 'CON_VER_RESP' */
-                STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP_COMPLETE, /**< Wait for Tx of 'CON_VER_RESP' is completed */
+        STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP,  /**< Send command 'CON_VER_RESP' */
+        STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP_COMPLETE, /**< Wait for Tx of 'CON_VER_RESP' is completed */
         /* UPDATE */
-                STATE_UPDATE_TX_ACK,    /**< Create and send 'ACK_MSG' */
-                STATE_UPDATE_TX_ACK_COMPLETE,   /**< Wait for Tx of 'ACK_MSG' is completed */
+        STATE_UPDATE_TX_ACK,    /**< Create and send 'ACK_MSG' */
+        STATE_UPDATE_TX_ACK_COMPLETE,   /**< Wait for Tx of 'ACK_MSG' is completed */
         /* ERROR */
         STATE_ERROR,  /**< Error state */
         NUMBER_STATES   /**< Number of application states */
@@ -118,12 +115,12 @@ extern "C" {
     // *****************************************************************************
     // *****************************************************************************
     /** data structure for a message used in application message queue */
-    struct sMSG {
-        eMSG_ID_T id;   /**< message id */
+    struct sMsg {
+        eMsgId_T id;   /**< message id */
         uint8_t data[MSG_DATA_SIZE];    /**< message buffer */
     };
-    /** typedef for ::sMSG \todo apply naming conventions sMsg_T*/
-    typedef struct sMSG sMSG_T;
+    /** typedef for ::sMsg */
+    typedef struct sMsg sMsg_T;
 
     /** data structure for the device id */
     struct sDeviceId {
@@ -143,7 +140,7 @@ extern "C" {
         union {
             struct {
                 uint8_t alarm : 1;  /**< Bit 0: Alarm */
-                uint8_t rfu_bit_1 : 1;  /**< Bit 1: RFU */
+                uint8_t bmz_update : 1;  /**< Bit 1: BMZ Update */
                 uint8_t rfu_bit_2 : 1;  /**< Bit 2: RFU */
                 uint8_t rfu_bit_3 : 1;  /**< Bit 3: RFU */
                 uint8_t rfu_bit_4 : 1;  /**< Bit 4: RFU */
@@ -182,12 +179,17 @@ extern "C" {
         sDeviceId_T candidate_device_id;    /**< device id of the candidate during learning mode */
         
         uint8_t sensor_slot; /**< contains the current slot information (0..(::NUMBER_OF_SENSORS-1)) */
-        ///> \todo keep alive messsage --> put to union with learning data, connection verification data ....
-        sDeviceId_T ka_device_id;
+        uint32_t slot_time_stamp[NUMBER_OF_SENSORS];    /**< contains the time stamp of the slot timer for each sensor slot. */
+        
+        // keep alive
+        sDeviceId_T ka_device_id;   /**< contains current keep alive device id */
         
         // connection verification
         uint16_t /*sDeviceId_T*/ con_ver_device_id; /**< device id of new sensor device */
         uint8_t con_ver_device_type;    /**< device type of new sensor device */
+
+        uint8_t service_channel_config; /**< service channel configuration for RF communication. \note Read from ATA8510 EEPROM @0x02A0 */
+        bool alarm; /**< contains alarm state */
     };
     /**
      * application data structure
@@ -217,7 +219,7 @@ extern "C" {
     typedef struct sMsgPair sMsgPair_T;
     
     /** typedef for applications state machine functions */
-    typedef void (* fpVoidFuncMsg_T)(sMSG_T *p_msg);
+    typedef void (* fpVoidFuncMsg_T)(sMsg_T *p_msg);
 
     
     // *****************************************************************************
@@ -310,6 +312,8 @@ extern "C" {
      * @param delay_ms  Delay in ms
      */
     extern void APPLICATION_DelayMs(uint32_t delay_ms);
+    
+    extern void APPLICATION_SendStatus();
 
     /* Provide C++ Compatibility */
 #ifdef __cplusplus

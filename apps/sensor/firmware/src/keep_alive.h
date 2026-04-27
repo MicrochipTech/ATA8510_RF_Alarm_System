@@ -59,6 +59,38 @@ extern void state_keep_alive_rx_ack(void);
  */
 extern void state_keep_alive_sleep(void);
 
+/**
+ * Initial state keep alive implementation (Child First approach)
+ */
+extern void state_ka_cf(void);
+/**
+ * Wait for KA_MSG from child sensor received
+ */
+extern void state_ka_cf_process_child_rx_ka_msg(void);
+/**
+ * Start RF TX to send ACK_MSG to child sensor device
+ */
+extern void state_ka_cf_process_child_tx_ack_msg(void);
+/**
+ * RF TX of ACK_MSG complete
+ */
+extern void state_ka_cf_process_child_tx_ack_msg_complete(void);
+/**
+ * Send out KA_MSG to parent sensor
+ */
+extern void state_ka_cf_tx_ka_msg(void);
+/**
+ * Start RF RX mode to receive ACK_MSG from parent
+ */
+extern void state_ka_cf_start_rx_ack(void);
+/**
+ * ACK_MSG received
+ */
+extern void state_ka_cf_rx_ack(void);
+/**
+ * Enter Sleep Mode after KA_MSG was acknowledged
+ */
+extern void state_ka_cf_sleep(void);
 
 
 

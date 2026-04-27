@@ -369,7 +369,7 @@ extern "C" {
      * RF module main function
      * @param p_msg message handle to process in RF module main function
      */
-    extern void RF_Tasks(sMSG_T *p_msg);
+    extern void RF_Tasks(sMsg_T *p_msg);
     /**
      * Apply Reset to ATA8510 module
      */

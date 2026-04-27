@@ -29,14 +29,14 @@ typedef enum {
     /* IDLE STATE */
     STATE_IDLE, /**< Idle State, enter after Reset if the device id is valid */
     /* KEEP ALIVE STATES */
-    STATE_KEEP_ALIVE,   /**< Initial state of keep alive state machine */
-    STATE_KEEP_ALIVE_TX_KA_MSG, /**< send KA_MSG */
-    STATE_KEEP_ALIVE_START_RX_ACK,  /**< start RF RX  */
-    STATE_KEEP_ALIVE_RX_ACK,    /**< ACK_MSG received */
-    STATE_KEEP_ALIVE_PROCESS_CHILD_RX_KA_MSG,   /**< KA_MSG of child device received */
-    STATE_KEEP_ALIVE_PROCESS_CHILD_TX_ACK_MSG, /**< Create TX_ACK message and send to child sensor */
-    STATE_KEEP_ALIVE_PROCESS_CHILD_TX_ACK_MSG_COMPLETE, /**< Sending TX_ACK message completed*/
-    STATE_KEEP_ALIVE_SLEEP, /**< keep alive message handling completed, enter sleep mode */
+    STATE_KA_CF,    /**< Initial state of keep alive state machine */
+    STATE_KA_CF_PROCESS_CHILD_RX_KA_MSG,    /**< KA_MSG of child device received */
+    STATE_KA_CF_PROCESS_CHILD_TX_ACK_MSG,   /**< Create TX_ACK message and send to child sensor */
+    STATE_KA_CF_PROCESS_CHILD_TX_ACK_MSG_COMPLETE,  /**< Sending TX_ACK message completed */
+    STATE_KA_CF_TX_KA_MSG,  /**< send KA_MSG */
+    STATE_KA_CF_START_RX_ACK,   /**< start RF RX */
+    STATE_KA_CF_RX_ACK, /**< ACK_MSG received */
+    STATE_KA_CF_SLEEP,  /**< keep alive message handling completed, enter sleep mode */
     /* CHILD SENSOR LEARN STATES */
     STATE_CHILD_SENSOR_LEARN_TX_PART_REQ,   /**< Send PART_REQ command to parent device */
     STATE_CHILD_SENSOR_LEARN_START_RX_PART_REQ_RESP,    /**< Start RF Rx to receive PART_REQ_RESP */
@@ -63,20 +63,8 @@ typedef enum {
     STATE_VERIFICATION, /**< verification state  */
     /* STATUS UPDATE STATE */
     STATE_STATUS_UPDATE,    /**< status update state */
-            // receive status
-            // --GW-- STATE_STATUS_UPDATE_TX_ACK_MSG,
-            // --GW-- STATE_STATUS_UPDATE_TX_ACK_MSG_COMPLETE,
-            
-            // send status
-            // --GW-- STATE_STATUS_UPDATE_TX_UD_MSG,
-            // --GW-- STATE_STATUS_UPDATE_TX_UD_MSG_COMPLETE,
-            // --GW-- STATE_STATUS_UPDATE_RX_ACK_MSG,
-            // --GW-- STATE_STATUS_UPDATE_SLEEP,
-            
-    /* ALARM STATE */
-    STATE_ALARM,    /**< Create AL_MSG message and start RF TX */
-    STATE_ALARM_START_RX_ACK_MSG,   /**< Start RF RX and wait for ACK_MSG */
-    STATE_ALARM_RX_ACK_MSG, /**< ACK_MSG received */
+    /* ALARM STATE*/
+    STATE_ALARM,    /**< Alarm State */
     /* ERROR STATE */
     STATE_ERROR /**< Error State (infinite loop) */
 }eState_T;
@@ -231,14 +219,14 @@ typedef enum {
     PATTERN_STATE_IDLE = 0x10,  /**< debug pattern for ::STATE_IDLE (0x10) */
     /* KEEP ALIVE STATE */
     PATTERN_KEEP_ALIVE = 0x20,  /**< debug pattern for KEEP_ALIVE (0x20) */
-    PATTERN_STATE_KEEP_ALIVE = 0x20,    /**< debug pattern for ::STATE_KEEP_ALIVE (0x20) */
-    PATTERN_STATE_KEEP_ALIVE_TX_KA_MSG, /**< debug pattern for ::STATE_KEEP_ALIVE_TX_KA_MSG (0x21) */
-    PATTERN_STATE_KEEP_ALIVE_START_RX_ACK,  /**< debug pattern for ::STATE_KEEP_ALIVE_START_RX_ACK (0x22) */
-    PATTERN_STATE_KEEP_ALIVE_RX_ACK,    /**< debug pattern for ::STATE_KEEP_ALIVE_RX_ACK (0x23) */
-    PATTERN_STATE_KEEP_ALIVE_PROCESS_CHILD_RX_KA_MSG,   /**< debug pattern for ::STATE_KEEP_ALIVE_PROCESS_CHILD_RX_KA_MSG (0x24) */
-    PATTERN_STATE_KEEP_ALIVE_PROCESS_CHILD_TX_ACK_MSG,  /**< debug pattern for ::STATE_KEEP_ALIVE_PROCESS_CHILD_TX_ACK_MSG (0x25) */
-    PATTERN_STATE_KEEP_ALIVE_PROCESS_CHILD_TX_ACK_MSG_COMPLETE, /**< debug pattern for ::STATE_KEEP_ALIVE_PROCESS_CHILD_TX_ACK_MSG_COMPLETE (0x26) */
-    PATTERN_STATE_KEEP_ALIVE_SLEEP, /**< debug pattern for ::STATE_KEEP_ALIVE_SLEEP (0x27) */
+    PATTERN_STATE_KA_CF = 0x20,    /**< debug pattern for ::STATE_KA_CF (0x20) */
+    PATTERN_STATE_KA_CF_PROCESS_CHILD_RX_KA_MSG,    /**< debug pattern for ::STATE_KA_CF_PROCESS_CHILD_RX_KA_MSG (0x21) */
+    PATTERN_STATE_KA_CF_PROCESS_CHILD_TX_ACK_MSG,   /**< debug pattern for ::STATE_KA_CF_PROCESS_CHILD_TX_ACK_MSG (0x22) */
+    PATTERN_STATE_KA_CF_PROCESS_CHILD_TX_ACK_MSG_COMPLETE,  /**< debug pattern for ::STATE_KA_CF_PROCESS_CHILD_TX_ACK_MSG_COMPLETE (0x23) */
+    PATTERN_STATE_KA_CF_TX_KA_MSG,  /**< debug state for ::STATE_KA_CF_TX_KA_MSG (0x24) */
+    PATTERN_STATE_KA_CF_START_RX_ACK,   /**< debug state for ::STATE_KA_CF_START_RX_ACK (0x25) */
+    PATTERN_STATE_KA_CF_RX_ACK, /**< debug state for ::STATE_KA_CF_RX_ACK (0x26) */
+    PATTERN_STATE_KA_CF_SLEEP,  /**< debug state for ::STATE_KA_CF_SLEEP (0x27) */
     /* CHILD LEARN STATE */
     PATTERN_CHILD_LEARN = 0x30, /**< debug pattern for CHILD_LEARN (0x30) */
     PATTERN_STATE_CHILD_SENSOR_LEARN_TX_PART_REQ = 0x30,    /**< debug pattern for ::STATE_CHILD_SENSOR_LEARN_TX_PART_REQ (0x30) */
@@ -268,10 +256,7 @@ typedef enum {
     /* STATUS UPDATE STATE */
     PATTERN_STATE_STATUS_UPDATE = 0x70, /**< debug pattern for ::STATE_STATUS_UPDATE (0x70) */
     /* ALARM STATE */
-    PATTERN_ALARM_STATE = 0x80, /**< debug pattern for ALARM_STATE (0x80) */
     PATTERN_STATE_ALARM = 0x80, /**< debug pattern for ::STATE_ALARM (0x80) */
-    PATTERN_STATE_ALARM_START_RX_ACK_MSG,   /**< debug pattern for ::STATE_ALARM_START_RX_ACK_MSG (0x81) */
-    PATTERN_STATE_ALARM_RX_ACK_MSG,   /**< debug pattern for ::STATE_ALARM_RX_ACK_MSG (0x82) */
     /* ERROR STATE */
     PATTERN_STATE_ERROR = 0x90, /**< debug pattern for ::STATE_ERROR (0x90) */
     /* PATERN_STATE_RESET */
@@ -298,11 +283,15 @@ typedef enum {
     DBG_PATTERN8(PATTERN_##var); \
     state = var; \
 }
-
+/** Checks if application is in ::STATE_IDLE 
+ * true if in ::STATE_IDLE, otherwise false
+ */
+#define IS_IDLE_STATE() (state == STATE_IDLE)
 /** Checks if application is in Keep Alive state 
  * true if in Keep Alive, otherwise false
  */
-#define IS_KEEP_ALIVE_STATE() ((state >=STATE_KEEP_ALIVE)&&(state <=(STATE_KEEP_ALIVE_SLEEP-1)))
+// #define IS_KEEP_ALIVE_STATE() ((state >=STATE_KEEP_ALIVE)&&(state <=(STATE_KEEP_ALIVE_SLEEP-1)))
+#define IS_KEEP_ALIVE_STATE() ((state >=STATE_KA_CF)&&(state <=(PATTERN_STATE_KA_CF_SLEEP-1)))
 /** Checks if application is in Parent Learn state 
  * true if in Parent Learn, otherwise false
  */
@@ -315,10 +304,6 @@ typedef enum {
  * true if in Learn, otherwise false
  */
 #define IS_LEARN_STATE() ( IS_PARENT_LEARN_STATE() || IS_CHILD_LEARN_STATE() )
-/** Checks if application is in Alarm state 
- * true if in Alarm, otherwise false
- */
-#define IS_ALARM_STATE() ((state >=STATE_ALARM)&&(state<=STATE_ALARM_RX_ACK_MSG))
 /** Checks if RF is in IDLE mode 
  * true if in IDLE mode, otherwise false
  */
@@ -339,6 +324,17 @@ typedef enum {
     API_SystemReset_C(); \
 }
 
+/** Sets Green LED according to alarm state
+ * if alarm is on, LED is switched on, otherwise LED is is switched off
+ */
+#define APPLY_ALARM_TO_LED() \
+{ \
+    if ( app_data.status.alarm == ALARM_ON) { \
+        LED_GREEN_ON(); \
+    } else { \
+        LED_GREEN_OFF(); \
+    } \
+}
 /*===========================================================================*/
 /*  EXTERNAL PROTOTYPES                                                      */
 /*===========================================================================*/

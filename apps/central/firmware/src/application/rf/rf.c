@@ -58,12 +58,6 @@ volatile bool _is_irq = false;
 #define RF_SPI_NSS_SET()    EXT1_ATA8510_PCINT5_INT1_NSS_PB5_Set()
 #define RF_SPI_NSS_CLEAR()  EXT1_ATA8510_PCINT5_INT1_NSS_PB5_Clear()
 
-#define RF_CHANNEL  CHANNEL_0
-// --GW-- #define RF_CHANNEL  CHANNEL_1
-#define RF_SERVICE  SERVICE_0
-#define RF_ENA_PATH_A   PATH_A_ON
-#define RF_ENA_PATH_B   PATH_B_OFF
-
 /* ************************************************************************** */
 /* ************************************************************************** */
 // Section: Local Functions                                                   */
@@ -76,7 +70,7 @@ volatile bool _is_irq = false;
 static void _RF_IrqCallback(uintptr_t context) {
     _is_irq = (bool)RF_IRQ_GET();
     if (_is_irq) {
-        sMSG_T msg;
+        sMsg_T msg;
         msg.id = MSG_ID_RF_IRQ;
         xQueueSend(app_data.msg_queue, &msg, 0);
     }
@@ -116,7 +110,7 @@ void RF_Initialize(void) {
     _is_irq = false;
 }
 
-void RF_Tasks(sMSG_T *p_msg) {
+void RF_Tasks(sMsg_T *p_msg) {
     if ( p_msg->id == MSG_ID_RF_IRQ ) {
         RF_ATA8510_SPI_GetEventBytes(NULL);
     } else {
@@ -180,12 +174,9 @@ void RF_SetIdleMode(void) {
         .ant_tune = ANT_TUNE_OFF,
         .rf_cal = RF_CAL_OFF,
     };
-    sServiceChannelConfig_t service_channel = {
-        .ser = RF_SERVICE,
-        .ch = RF_CHANNEL,
-        .ena_path_a = PATH_A_OFF,
-        .ena_path_b = PATH_B_OFF
-    };
+    sServiceChannelConfig_t service_channel;
+    service_channel.raw = app_data.service_channel_config;
+    
     RF_ATA8510_SPI_SetSystemMode(mode, service_channel);
 }
 
@@ -199,12 +190,8 @@ void RF_SetRxModeBuffered(void) {
         .ant_tune = ANT_TUNE_OFF,
         .rf_cal = RF_CAL_OFF,
     };
-    sServiceChannelConfig_t service_channel = {
-        .ser = RF_SERVICE,
-        .ch = RF_CHANNEL,
-        .ena_path_a = RF_ENA_PATH_A,
-        .ena_path_b = RF_ENA_PATH_B,
-    };
+    sServiceChannelConfig_t service_channel;
+    service_channel.raw = app_data.service_channel_config;
     RF_ATA8510_SPI_SetSystemMode(mode, service_channel);
 }
 
@@ -225,12 +212,8 @@ void RF_SetTxModeBuffered(uint8_t len, uint8_t *p_data) {
         .ant_tune = ANT_TUNE_OFF,
         .rf_cal = RF_CAL_OFF,
     };
-    sServiceChannelConfig_t service_channel = {
-        .ser = RF_SERVICE,
-        .ch = RF_CHANNEL,
-        .ena_path_a = RF_ENA_PATH_A,
-        .ena_path_b = RF_ENA_PATH_B,
-    };
+    sServiceChannelConfig_t service_channel;
+    service_channel.raw = app_data.service_channel_config;
     RF_ATA8510_SPI_SetSystemMode(mode, service_channel);
 }
 
@@ -373,7 +356,6 @@ uint8_t RF_ATA8510_SPI_ReadSramRegister(uint8_t len, uint16_t address, uint8_t *
 }
 
 uint8_t RF_ATA8510_SPI_ReadEeprom(uint16_t address) { 
-    // TODO: Add Range Check
     uint8_t cmd[ATA8510_SPI_CMD_LEN_READ_EEPROM] = {0};
     cmd[0] = ATA8510_SPI_CMD_ID_READ_EEPROM;
     cmd[1] = (uint8_t) ( (address >> 8) & 0x00FF ); // addr_high

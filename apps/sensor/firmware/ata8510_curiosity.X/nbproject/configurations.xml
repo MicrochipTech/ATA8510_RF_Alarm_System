@@ -139,10 +139,10 @@
       <itemPath>../src/parent_learn.h</itemPath>
       <itemPath>../src/common.h</itemPath>
       <itemPath>../src/common.c</itemPath>
-      <itemPath>../src/alarm.c</itemPath>
-      <itemPath>../src/alarm.h</itemPath>
       <itemPath>../src/update.c</itemPath>
       <itemPath>../src/update.h</itemPath>
+      <itemPath>../src/rtc.c</itemPath>
+      <itemPath>../src/rtc.h</itemPath>
     </logicalFolder>
   </logicalFolder>
   <sourceRootList>

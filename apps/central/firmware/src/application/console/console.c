@@ -40,7 +40,7 @@ struct sVersion {
 typedef struct sVersion sVersion_T;
 /** application version information (stored in FLASH) */
 const sVersion_T app_version = {
-    .major = 0, .minor = 0, .patch=1
+    .major = 1, .minor = 0, .patch=0
 };
 
 /* ************************************************************************** */
@@ -67,7 +67,7 @@ eSENSOR_ID_T _COMMAND_GetSensorId(char *sensor_name) {
 }
 
 void _CONSOLE_CmdStartLearn(SYS_CMD_DEVICE_NODE* pCmdIO, int argc, char **argv) {
-    sMSG_T msg;
+    sMsg_T msg;
     msg.id = MSG_ID_INVALID;
     if (argc == 2 ) {
         if ( strcmp(argv[1], "C") == 0 ) {
@@ -85,12 +85,8 @@ void _CONSOLE_CmdStartLearn(SYS_CMD_DEVICE_NODE* pCmdIO, int argc, char **argv) 
     }
 }
 
-void _COMMAND_CmdVerify(SYS_CMD_DEVICE_NODE* pCmdIO, int argc, char **argv) {
-    /* TODO: Add Implementation */
-}
-
 void _CommandSetAlarm(SYS_CMD_DEVICE_NODE* pCmdIO, int argc, char **argv) {
-    sMSG_T msg;
+    sMsg_T msg;
     msg.id = MSG_ID_INVALID;
     if (argc == 2) {
         msg.id = MSG_ID_CONSOLE_CMD_SENSOR_ALARM;
@@ -106,7 +102,7 @@ void _COMMAND_CmdCentralReset(SYS_CMD_DEVICE_NODE* pCmdIO, int argc, char **argv
 }
 
 void _COMMAND_CmdSensorReset(SYS_CMD_DEVICE_NODE* pCmdIO, int argc, char **argv) {
-    sMSG_T msg;
+    sMsg_T msg;
     msg.id = MSG_ID_INVALID;
     if (argc == 2) {
         msg.id = MSG_ID_CONSOLE_CMD_SENSOR_RESET;
@@ -118,9 +114,7 @@ void _COMMAND_CmdSensorReset(SYS_CMD_DEVICE_NODE* pCmdIO, int argc, char **argv)
 }
 
 void _COMMAND_CmdTest(SYS_CMD_DEVICE_NODE* pCmdIO, int argc, char **argv) {
-    /* TODO: Add Implementation */
-    // SYS_DEBUG_MESSAGE(SYS_ERROR_DEBUG, "_COMMAND_Learn(...)");
-    sMSG_T msg;
+    sMsg_T msg;
     msg.id = MSG_ID_CONSOLE_CMD_TEST;
     xQueueSend(app_data.msg_queue, &msg, 0);
 }
@@ -130,7 +124,6 @@ void _COMMAND_CmdTest(SYS_CMD_DEVICE_NODE* pCmdIO, int argc, char **argv) {
 static const SYS_CMD_DESCRIPTOR cmdTbl[] = {
     {"VERSION?", _CONSOLE_CmdVersion, ": Get Version"},
     {"START_LEARN", _CONSOLE_CmdStartLearn, ": Start Learn Mode"},
-    {"verify", _COMMAND_CmdVerify, ": Start Verify Mode"},
     {"SET_ALARM", _CommandSetAlarm, ": Set Sensor Alarm"},
     {"CENTRAL_RESET", _COMMAND_CmdCentralReset, ": Set Central Reset"},
     {"SENSOR_RESET", _COMMAND_CmdSensorReset, ": Set Sensor Reset"},
@@ -145,9 +138,16 @@ static const SYS_CMD_DESCRIPTOR cmdTbl[] = {
 void CONSOLE_Initialize(void) {
     bool result = SYS_CMD_ADDGRP(cmdTbl, sizeof(cmdTbl)/sizeof(*cmdTbl),"commands", ": Commands");
     ASSERT(!result, "SYS_CMD_ADDGRP fails");    
+    
+    SYS_CONSOLE_MESSAGE("\r\n-----------------------------------");
+    SYS_CONSOLE_MESSAGE("\r\n-----------------------------------");
+    SYS_CONSOLE_PRINT("\r\n- CENTRAL V%d.%d.%d",app_version.major,app_version.minor,app_version.patch);
+    SYS_CONSOLE_MESSAGE("\r\n-----------------------------------");
+    SYS_CONSOLE_MESSAGE("\r\n-----------------------------------\r\n");
+    
 }
 
-void CONSOLE_Tasks(sMSG_T *p_msg) {
+void CONSOLE_Tasks(sMsg_T *p_msg) {
     if ( p_msg->id == MSG_ID_CONSOLE_CMD_START_LEARN_SENSOR  ) {
         eSENSOR_ID_T id  = p_msg->data[0];
         TEST_SensorStartLearn(id);

@@ -74,6 +74,8 @@
 #include "firmware/rfrx/src/rfrx.h"
 #include "firmware/system/src/system.h"
 
+#include "rtc.h"
+
 #include "wrap.h"
 /*===========================================================================*/
 /*  DEFINES  */
@@ -106,23 +108,6 @@ struct sDeviceId {
 };
 typedef struct sDeviceId sDeviceId_T;
 
-struct sSensorStatus {
-    union {
-        struct {
-            uint8_t alarm : 1;  /**< Bit 0: Alarm */
-            uint8_t rfu_bit_1 : 1;  /**< Bit 1: RFU */
-            uint8_t rfu_bit_2 : 1;  /**< Bit 2: RFU */
-            uint8_t rfu_bit_3 : 1;  /**< Bit 3: RFU */
-            uint8_t rfu_bit_4 : 1;  /**< Bit 4: RFU */
-            uint8_t rfu_bit_5 : 1;  /**< Bit 5: RFU */
-            uint8_t rfu_bit_6 : 1;  /**< Bit 6: RFU */
-            uint8_t rfu_bit_7 : 1;  /**< Bit 7: RFU */
-        };
-        uint8_t raw;
-    };
-};
-typedef struct sSensorStatus sSensorStatus_T;
-
 /** enum for application command IDs */
 typedef enum {
     KA_MSG = 0x03,  /**< Message Identifier for Keep-Alive message/command */
@@ -139,14 +124,23 @@ typedef enum {
     PAY_MSG = 0x0E, /**< Message Identifier for Paylod message/command */
     NUM_MSGS    /**< Number of Message Identifiers */
 } eMsg_T;
-
+/** enum for alarm settings */
+typedef enum {
+    ALARM_OFF = 0,  /**< Alarm is OFF */
+    ALARM_ON = 1    /**< Alarm is ON */
+} eAlarm_T;
+/** enum for security settings */
+typedef enum {
+    SECURITY_OFF = 0,   /**< Security is OFF */
+    SECURITY_ON = 1     /**< Security is ON */
+} eSecurity_T;
 /** data structure containing status information of the sensor */
 struct sStatus {
     union {
         struct {
             uint8_t bmz_update : 1;
             uint8_t accept_device : 1;
-            uint8_t clear_blocked_list : 1;
+            uint8_t alarm : 1;
             uint8_t payload : 1;
             uint8_t security : 1;
             uint8_t okay : 1;
@@ -169,7 +163,6 @@ typedef struct sCommandHeader sCommandHeader_T;
 struct sCommandNoPayload {
     sCommandHeader_T hdr;
 };
-typedef struct sCommandNoPayload sCommandPartReqResp_T;
 
 /*
  * KA_MSG
@@ -239,15 +232,22 @@ typedef struct sCommandNoPayload sCommandAlMsg_T;
 /*
  * PART_REQ
  */
+
 struct sCommandPartReq {
     sCommandHeader_T hdr;
-    uint8_t device_type;
+    uint8_t device_type;    /**< device type of the sensor to be added to the network */
 };
 typedef struct sCommandPartReq sCommandPartReq_T;
 
 /*
  * PART_REQ_RESP
  */
+struct sCommandPartReqResp {
+    sCommandHeader_T hdr;
+    uint8_t count;
+};
+typedef struct sCommandPartReqResp sCommandPartReqResp_T;
+
 
 /*
  * MEM_KEY
@@ -265,17 +265,9 @@ typedef struct sCommandPartReq sCommandPartReq_T;
  * The connection status contains a time base for regular communication and the 
  * actual number of nodes within the level (of the new connected device)
  */
-struct sConVerSta {
-    union {
-        uint16_t tick_cnt : 12;  /** \todo  add content */
-        uint16_t number_of_nodes : 4;  /** \todo add content */
-    };
-    uint16_t raw;
-};
-typedef struct sConVerSta sConVerSta_T;
 
 struct sCommandConVerSta {
-    sCommandHeader_T hdr;   /**< command heaader */
+    sCommandHeader_T hdr;   /**< command header */
     uint16_t status;    /**< connection verification status */
 };
 typedef struct sCommandConVerSta sCommandConVerSta_T;
@@ -312,9 +304,13 @@ union uStatus {
     uint8_t rfu_bit2 : 1;  /** Bit 2: reserved for future use */
     uint8_t rfu_bit3 : 1;  /** Bit 3: reserved for future use */
     uint8_t rfu_bit4 : 1;  /** Bit 4: reserved for future use */
-    uint8_t rfu_bit5 : 1;  /** Bit 5: reserved for future use */
-    uint8_t rfu_bit6 : 1;  /** Bit 6: reserved for future use */
-    uint8_t rfu_bit7 : 1;  /** Bit 7: reserved for future use */
+#if 0 /* correction */
+    uint8_t apply_correction : 1;  /** Bit 5: \todo reserved for future use */
+#else
+    uint8_t rfu_bit5 : 1;  /** Bit 4: reserved for future use */
+#endif
+    uint8_t bmz_update : 1;  /** Bit 6: BMZ update */
+    uint8_t alarm : 1;  /** Bit 7: alarm flag */
     };
     uint8_t raw;    /**< status byte */
 };
@@ -328,10 +324,13 @@ struct sAppData {
     uint16_t device_id;  /**< 16-bit device ID (default: 0xFFFF) */
     uint16_t parent_id;  /**< 16-bit parent ID (default: 0xFFFF) */
     uint16_t child_id[NUMBER_OF_SENSORS];    /**< 5 x (16-bit child ID) (default: 0xFFFF)  */
-    int16_t ka_interval_correction; /**< correction value to synchronize interval for KA_MSG processing (default: 0 = ~0ms) */
+#if 0 /* correction */
+    int16_t ka_interval; /**<  interval for KA_MSG processing (default: 1953 = ~1s) */
+#endif
     /* 
      * EEPROM Settings for Sensor Synchronization
      */
+#if 0 /* correction */
     uint16_t rx_window_upper_threshold; /**< rx_window upper threshold (default: 200 = ~100ms) */
     uint16_t rx_window_lower_threshold; /**< rx_window lower threshold (default: 80 = ~40ms )*/
 
@@ -343,13 +342,48 @@ struct sAppData {
     
     int16_t correction_offset_low;  /**< correction_offset applied when rx_window < lower_threshold (default: 40 = ~20ms) */
     int16_t correction_interval_low;    /**< correction_interval applied when rx_window < lower_threshold (default: 10 = ~5ms)) */
+#endif
+    /*
+     * EEPROM Settings for Service Channel Selection
+     */
+    /** RF service channel configuration 
+     * - bit 0..2: service
+     * - bit 3: rfu
+     * - bit 4..5: channel
+     * - bit 6: enaPathA
+     * - bit 7: enaPathB
+     */
+    uint8_t service_channel_config; 
+    volatile uStatus_T status;   /**< sensor status */
+    volatile uint8_t count; /**< KA message counter (modulo 10) */
     
+#if 0 /* correction */
+    int16_t offset; /**< offset for correction of rx window */
+    int16_t interval;   /**< interval for correction of rx window */
+#endif
 };
 /** type definition for ::sAppData */
 typedef struct sAppData sAppData_T;
 
+#define RTC_SRAM_APP_DATA (RTC_SRAM_START + (uint8_t *)&app_data - (uint8_t *)&app_data)    /**< Address of appData in RTC SRAM */
+#define RTC_SRAM_APP_DATA_DEVICE_ID (RTC_SRAM_START + (uint8_t *)&app_data.device_id - (uint8_t *)&app_data)    /**< Address of appData.device_id in RTC SRAM */
+#define RTC_SRAM_APP_DATA_PARENT_ID (RTC_SRAM_START + (uint8_t *)&app_data.parent_id - (uint8_t *)&app_data)    /**< Address of appData.parent_id in RTC SRAM */
+#define RTC_SRAM_APP_DATA_CHILD_ID (RTC_SRAM_START + (uint8_t *)&app_data.child_id - (uint8_t *)&app_data)  /**< Address of appData.child_id in RTC SRAM */
+#if 0 /* correction */
+#define RTC_SRAM_APP_DATA_KA_INTERVAL (RTC_SRAM_START + (uint8_t *)&app_data.ka_interval - (uint8_t *)&app_data)    /**< Address of appData.ka_interval in RTC SRAM */
+#endif
+// ...
+#define RTC_SRAM_APP_DATA_STATUS (RTC_SRAM_START + (uint8_t *)&app_data.status - (uint8_t *)&app_data)  /**< Address of appData.status in RTC SRAM */
+#define RTC_SRAM_APP_DATA_COUNT (RTC_SRAM_START + (uint8_t *)&app_data.count - (uint8_t *)&app_data)  /**< Address of appData.count in RTC SRAM */
+#if 0 /* correction */
+#define RTC_SRAM_APP_DATA_OFFSET (RTC_SRAM_START + (uint8_t *)&app_data.offset - (uint8_t *)&app_data)  /**< Address of appData.offset in RTC SRAM */
+#define RTC_SRAM_APP_DATA_INTERVAL (RTC_SRAM_START + (uint8_t *)&app_data.interval - (uint8_t *)&app_data)  /**< Address of appData.interval in RTC SRAM */
+#endif
+
 /** start address for application data store in EEPROM */
 #define ADDRESS_EEP_DATA    0x0280  
+/** start address for application factory data store in EEPROM used for reset device id */
+#define ADDRESS_EEP_FAC_DATA    0x02B0      
 
 
 /*===========================================================================*/

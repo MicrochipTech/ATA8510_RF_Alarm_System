@@ -9,9 +9,6 @@
 /*===========================================================================*/
 
 #define SYSTEM_MODE_CONFIG  ( BM_SYS_MODE_CONFIG_VCO_TUNING )
-#define SERVICE_CHANNEL_CONFIG  ( BM_SVC_CH_CONFIG_PATHA )
-// --GW-- #define SERVICE_CHANNEL_CONFIG  ( BM_SVC_CH_CONFIG_PATHA | BM_SVC_CH_CONFIG_CH0 )
-
 
 #define SET_PATTERN_PIN() { PORTC |= (1<<2); }
 #define CLEAR_PATTERN_PIN() { PORTC &= ~(1<<2); }
@@ -76,21 +73,6 @@ void debug_pattern8_pc2(uint8_t pattern) {
     }
     PATTERN_END_SEQUENCE();    
     _SEI;
-#if false
-    TOGGLE_PATTERN_PIN(200);
-    for (int i=7;i>=0;i--) {
-        TOGGLE_PATTERN_PIN(10);
-        CLEAR_PATTERN_PIN();
-        if ( pattern & (1<<i) ) {
-            SET_PATTERN_PIN();
-        } else {
-            CLEAR_PATTERN_PIN();
-        }
-        for (int wait=0;wait<100;wait++){_NOP;}
-    }
-    TOGGLE_PATTERN_PIN(10);
-    CLEAR_PATTERN_PIN();
-#endif
 }
 void debug_pattern16_pc2(uint16_t pattern) {
     _CLI;
@@ -104,25 +86,10 @@ void debug_pattern16_pc2(uint16_t pattern) {
     }
     PATTERN_END_SEQUENCE();
     _SEI;
-#if false
-    TOGGLE_PATTERN_PIN(200);
-    for (int i=15;i>=0;i--) {
-        TOGGLE_PATTERN_PIN(10);
-        CLEAR_PATTERN_PIN();
-        if ( pattern & (1<<i) ) {
-            SET_PATTERN_PIN();
-        } else {
-            CLEAR_PATTERN_PIN();
-        }
-        for (int wait=0;wait<100;wait++){_NOP;}
-    }
-    TOGGLE_PATTERN_PIN(10);
-    CLEAR_PATTERN_PIN();
-#endif
 }
 
 void set_idle_mode(void) {
-    API_SetSystemMode_C( OPM_IDLE, SERVICE_CHANNEL_CONFIG );
+    API_SetSystemMode_C( OPM_IDLE, app_data.service_channel_config );
 }
 
 void set_tx_mode(uint8_t *p_data, uint8_t len) {
@@ -130,11 +97,11 @@ void set_tx_mode(uint8_t *p_data, uint8_t len) {
     API_WriteTxPreambleBuffer_C( (uint8_t *)preamble, sizeof(preamble) ); \
     API_WriteTxBuffer_C( p_data, len );
     /** \todo ADD CRC HERE */
-    API_SetSystemMode_C( SYSTEM_MODE_CONFIG | OPM_TX, SERVICE_CHANNEL_CONFIG );
+    API_SetSystemMode_C( SYSTEM_MODE_CONFIG | OPM_TX, app_data.service_channel_config );
 }
 
 void set_rx_mode(void) {
-    API_SetSystemMode_C( SYSTEM_MODE_CONFIG | OPM_RX, SERVICE_CHANNEL_CONFIG );
+    API_SetSystemMode_C( SYSTEM_MODE_CONFIG | OPM_RX, app_data.service_channel_config );
 }
 
 uint8_t get_telegram(uint8_t *p_data) {

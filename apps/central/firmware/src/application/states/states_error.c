@@ -1,5 +1,5 @@
 /* ************************************************************************** */
-/** Descriptive File Name
+/* Descriptive File Name
 
   @Company
     Company Name
@@ -15,6 +15,9 @@
  */
 /* ************************************************************************** */
 
+/** \file states_error.c
+ * functions for error state machine.
+ */
 /* ************************************************************************** */
 /* ************************************************************************** */
 /* Section: Included Files                                                    */
@@ -42,8 +45,10 @@
 // Section: Interface Functions                                               */
 /* ************************************************************************** */
 /* ************************************************************************** */
-
-void STATE_Error(sMSG_T *p_msg) {
+/** error state
+ * \param p_msg message to be handled
+ */
+void STATE_Error(sMsg_T *p_msg) {
     /* TODO: Add Implementation */
 }
 

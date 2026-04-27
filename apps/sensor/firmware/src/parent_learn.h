@@ -76,9 +76,6 @@ extern void state_parent_sensor_learn_start_rx_ack_msg_ud(void);
  */
 extern void state_parent_sensor_learn_rx_ack_msg_ud(void);
 
-
-/** \todo send ud msg to parent instead of keep alive */
-
 /* Reset Device ID (can only entered in Parent Learn Mode)*/
 /**
  * Check if Reset Device ID sequence is triggered (Button press during learn)

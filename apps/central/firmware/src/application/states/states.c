@@ -1,5 +1,5 @@
 /* ************************************************************************** */
-/** Descriptive File Name
+/* Descriptive File Name
 
   @Company
     Company Name
@@ -14,6 +14,10 @@
     Describe the purpose of this file.
  */
 /* ************************************************************************** */
+
+/** \file states.c
+ * function for application state machine.
+ */
 
 /* ************************************************************************** */
 /* ************************************************************************** */
@@ -30,6 +34,7 @@
 /* Section: File Scope or Global Data                                         */
 /* ************************************************************************** */
 /* ************************************************************************** */
+/** Mapping table between state index as key and state function as value */
 sFuncPair_T _states[] = {
     /* INIT */
     { STATE_INIT, STATE_Init },
@@ -49,9 +54,6 @@ sFuncPair_T _states[] = {
     { STATE_LEARN_RX_ACK_MSG, STATE_LearnRxAckMsg },
     { STATE_LEARN_PASS, STATE_LearnPass },
     { STATE_LEARN_FAIL, STATE_LearnFail },
-    /* ALARM */
-    { STATE_ALARM, STATE_Alarm },
-    { STATE_ALARM_TX_ACK_MSG_COMPLETE, STATE_AlarmTxAckMsgComplete },
     /* CONNECTION VERIFICATION */
     { STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP, STATE_ConnectionVerificationTxConVerResp },
     { STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP_COMPLETE, STATE_ConnectionVerificationTxConVerRespComplete },
@@ -62,10 +64,13 @@ sFuncPair_T _states[] = {
     { STATE_ERROR, STATE_Error },
 };
 
+/** Mapping table between state index as key and state name as value */
 sMsgPair_T _state_names[] = {
     { STATE_INIT, "STATE_INIT" },
     { STATE_WAIT_RF_SYS_RDY, "STATE_WAIT_RF_SYS_RDY" },
     { STATE_IDLE, "STATE_IDLE" },
+    { STATE_KEEP_ALIVE_TX_ACK, "STATE_KEEP_ALIVE"},
+    // { STATE_KEEP_ALIVE_TX_ACK_COMPLETE, "STATE_KEEP_ALIVE_TX_ACK_COMPLETE"},
     { STATE_LEARN, "STATE_LEARN" },
     { STATE_LEARN_RX_PART_REQ, "STATE_LEARN_RX_PART_REQ" },
     { STATE_LEARN_TX_PART_REQ_RESP, "STATE_LEARN_TX_PART_REQ_RESP" },
@@ -75,8 +80,6 @@ sMsgPair_T _state_names[] = {
     { STATE_LEARN_RX_ACK_MSG, "STATE_LEARN_RX_ACK_MSG" },
     { STATE_LEARN_PASS, "STATE_LEARN_PASS" },
     { STATE_LEARN_FAIL, "STATE_LEARN_FAIL" },
-    { STATE_ALARM, "STATE_ALARM" },
-    { STATE_ALARM_TX_ACK_MSG_COMPLETE, "STATE_ALARM_TX_ACK_MSG_COMPLETE" },
     { STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP, "STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP" },
     { STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP_COMPLETE, "STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP_COMPLETE" },
     { STATE_UPDATE_TX_ACK, "STATE_UPDATE_TX_ACK"},
@@ -96,12 +99,18 @@ sMsgPair_T _state_names[] = {
 // Section: Interface Functions                                               */
 /* ************************************************************************** */
 /* ************************************************************************** */
-
+/** Initialization of the state machine
+ *  switches to ::STATE_INIT
+ */
 void STATES_Initialize(void) {
-    STATE_SwitchState(STATE_INIT);
+    STATE_SwitchState(STATE_INIT, true);
 }
 
-void STATES_Tasks(sMSG_T *p_msg) {
+/** Task to handle state machine
+ *  calls the state machine function
+ *  \param p_msg message to be handled
+ */
+void STATES_Tasks(sMsg_T *p_msg) {
     
     fpVoidFuncMsg_T p_func = (fpVoidFuncMsg_T)APPLICATION_GetFunction( 
             app_data.state,
@@ -115,23 +124,28 @@ void STATES_Tasks(sMSG_T *p_msg) {
     }
 }
 
-void STATE_SwitchState(eAPPLICATION_STATE_T state) {
+/** function to switch state machine to given state 
+ * if a state message is defined, state is printed out
+ * \param state state to switch to
+ */
+void STATE_SwitchState(eAPPLICATION_STATE_T state, bool print_state) {
     app_data.state = state;
-    const char *p_msg = APPLICATION_GetMsg(
-        state, 
-        _state_names,
-        sizeof(_state_names)/sizeof(*_state_names)
-        );
-    if ( p_msg != NULL){
-        SYS_DEBUG_MESSAGE(SYS_ERROR_DEBUG, "\r\n>>> ");
-        SYS_DEBUG_MESSAGE(SYS_ERROR_DEBUG, p_msg);
-        SYS_DEBUG_MESSAGE(SYS_ERROR_DEBUG, " <<<\r\n");
+    if (print_state == true) {
+        const char *p_msg = APPLICATION_GetMsg(
+            state, 
+            _state_names,
+            sizeof(_state_names)/sizeof(*_state_names)
+            );
+        if ( p_msg != NULL){
+            SYS_DEBUG_MESSAGE(SYS_ERROR_DEBUG, ">>> ");
+            SYS_DEBUG_MESSAGE(SYS_ERROR_DEBUG, p_msg);
+            SYS_DEBUG_MESSAGE(SYS_ERROR_DEBUG, " <<<\r\n");
+        }
     }
-    
     uint8_t pattern = TEST_GetPattern(state);
     TEST_DebugPattern8(pattern);
 
-    sMSG_T msg;
+    sMsg_T msg;
     msg.id = MSG_ID_APP_TRIGGER;
     xQueueSend(app_data.msg_queue, &msg, 0);        
 }

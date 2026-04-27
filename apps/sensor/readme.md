@@ -11,13 +11,14 @@ Features: **| RF network topology |**
 
 ## ⚠ Disclaimer <!-- omit in toc -->
 
-<p><span style="color:red"><b>
-THE SOFTWARE ARE PROVIDED "AS IS" AND GIVE A PATH FOR SELF-SUPPORT AND SELF-MAINTENANCE. This repository contains example code intended to help accelerate client product development. </br>
-
+<b>
+THE SOFTWARE ARE PROVIDED "AS IS" AND GIVE A PATH FOR SELF-SUPPORT AND SELF-MAINTENANCE. This repository contains example code intended to help accelerate client product development.  
+<br>
+<br>
 For additional Microchip repos, see: <a href="https://github.com/Microchip-MPLAB-Harmony" target="_blank">https://github.com/Microchip-MPLAB-Harmony</a>
-
+<br>
 Checkout the <a href="https://microchipsupport.force.com/s/" target="_blank">Technical support portal</a> to access our knowledge base, community forums or submit support ticket requests.
-</span></p></b>
+</b>
 
 ## Contents<!-- omit in toc -->
 - [Introduction](#introduction)
@@ -26,15 +27,14 @@ Checkout the <a href="https://microchipsupport.force.com/s/" target="_blank">Tec
 - [Software Setup](#software-setup)
   - [Development Tools](#development-tools)
 - [Overview](#overview)
-  - [Reset](#reset)
-  - [Idle](#idle)
+  - [OFF Mode](#off-mode)
   - [Alarm](#alarm)
   - [Keep-Alive](#keep-alive)
   - [Learn](#learn)
     - [Child Learn](#child-learn)
     - [Parent Learn](#parent-learn)
   - [Reset Device Id](#reset-device-id)
-  - [EEPROM configuration](#eeprom-configuration)
+  - [Sensor configuration](#sensor-configuration)
 - [Board Programming](#board-programming)
   - [Connection setup](#connection-setup)
   - [Program the precompiled hex file using MPLAB X IPE](#program-the-precompiled-hex-file-using-mplab-x-ipe)
@@ -82,8 +82,7 @@ This section provides an overview of the sensor application, which is based on t
 
 The sensor application operates as a state machine with the following states:
 
-- Reset
-- Idle
+- OffMode
 - Alarm
 - Keep Alive
 - Learn including sub states
@@ -95,177 +94,170 @@ These states and their transitions are shown in the diagram below.
 
 <img src="images/sensor_state_overview.png" width=1200>
 
-**Button Control**<br>
+__Button Control__  
 These states can be entered using the two buttons on the ATA8510 Curiosity Board. The sensor device, based on the ATA8510 Curiosity Board, includes two buttons for control:
 
-- **Reset Button**
-- **User Button**
+- __Reset Button__
+- __User Button__
 
 The following button sequences are implemented:
 
-| Button Sequence                              | Function               |
-| :-                                           | :-                     |
-Reset Button Pressed                           | Reset Sensor Device    |
-Reset Button + User Button Pressed             | Enter Learn Mode       |
-User Button Pressed during Learn Mode          | Reset Sensor Device ID |
-User Button Pressed during Idle and Keep Alive | Set Alarm              |
+Button Sequence                               | Function
+--                                            |--
+Reset Button Pressed                          | Reset Sensor Device
+Reset Button + User Button Pressed            | Enter Learn Mode
+User Button Pressed during Learn Mode         | Reset Sensor Device ID
+User Button Pressed during Idle and Keep Alive| Set Alarm
 
 These button combinations allow users to easily reset the sensor, trigger an alarm, or initiate the learning process.
 
-**LED Signalling**
+__LED Signalling__
 
-> **TODO: Add comment**
-> 
 The two on‑board user LEDs indicate the application’s operating states.
 
-| Component | Description    | Pin on ATA8510 RF board     |
-| :-        | :-             | :-                          |
-| D100      | 3.3V Green LED | -                           |
-| D101      | 5V Green LED   | -                           |
-| D102      | User Red LED   | PB7                         |
-| D103      | User Green LED | PC5                         |
+Component | Description     | Pin on ATA8510 RF board
+--        |--               |--
+D100      | 3.3V Green LED  | -
+D101      | 5V Green LED    | -
+D102      | User Red LED, <br>__LED on If RX is Active otherwise off__    | PB7
+D103      | User Green LED, <br>__Alarm on if LED on, otherwise Alarm off__  | PC5
 
 <img src="images/ata8510_led.png" height="600"/> <br>
 
-### Reset
-Reset mode is entered when the reset button is pressed or when the device exits off/sleep mode. The reset state serves as the initial and central state from which all other states can be accessed. After a reset, the application executes initialization routines and then transitions to either idle, alarm, keep-alive, or learn mode.
-
-### Idle
-Idle mode is entered from the reset state if the device has a valid device ID, indicating that it is part of the network.
-From idle mode, the device can transition to either the keep-alive state or the alarm state.
-The keep-alive state is entered automatically after idle to signal presence to the parent device, while the alarm state is entered by pressing the user button.
-
-<img src="images/sensor_idle_states.png" height="200"/> <br>
+### OFF Mode
+If the sensor device is inactive, it remains in an off mode to conserve power. The device can be reactivated through button presses or scheduled timer events to enter alarm, keep-alive, or learning states.
 
 ### Alarm
-The alarm state, which holds the highest priority, is activated by pressing the user button, either from idle mode or directly from the keep-alive state. When the alarm state is active, all other processes are suspended to ensure the alarm message is sent immediately and receives priority handling within the system. After the alarm has been processed and acknowledged, the device returns to its normal operating state.
-
-<img src="images/sensor_alarm_states.png" height="500"/> <br>
-
-| State                        | State Machine Function       |
-| :-                           | :-                           |
-| STATE_ALARM                  | state_alarm                  |
-| STATE_ALARM_START_RX_ACK_MSG | state_alarm_start_rx_ack_msg |
-| STATE_ALARM_RX_ACK_MSG       | state_alarm_rx_ack_msg       |
+When the device is awakened by pressing the user button, it enters the alarm state. In this state, the sensor behaves the same as in the keep-alive mode; however, the alarm status flag is set, and the sensor includes this information in the keep-alive message (KA_MSG).
 
 ### Keep-Alive
-This chapter introduces the child sensor keep-alive state machine, describing how the sensor device manages periodic status updates, maintains communication with its parent device, and ensures reliable presence detection within the network.
 
-In keep-alive processing, the sensor first sends a keep-alive message to its parent device. Afterwards, it processes keep-alive messages from its child sensors. The acknowledgment (ACK) message received from the parent contains correction values, which are then forwarded to the child sensors.
+This chapter introduces the child sensor keep-alive state machine and explains how the sensor device manages periodic status updates, maintains communication with its parent device, and ensures reliable presence detection within the network.
+During keep-alive processing, the sensor first handles keep-alive messages from its child sensors. After all child sensors have been processed, the device then processes keep-alive communication with the parent device.
+
 The main states and their functions are as follows:
-
-- **STATE_KEEP_ALIVE:** Starts the 1-second interval timer to initiate the keep-alive process.
-- **STATE_KEEP_ALIVE_TX_KA_MSG:** Creates and sends the KA_MSG (keep-alive message) to the parent device.
-- **STATE_KEEP_ALIVE_START_RX_ACK:** Switches to RF receive mode after transmitting the KA_MSG, preparing to receive an acknowledgment.
-- **STATE_KEEP_ALIVE_RX_ACK:** Upon receiving an ACK_MSG, applies any correction values. If no child sensors are present, the device enters sleep mode (STATE_KEEP_ALIVE_SLEEP). If child sensors are present, the device continues keep-alive processing for them by starting RF receive mode.
-- **STATE_KEEP_ALIVE_PROCESS_CHILD_RX_KA_MSG:** Receives a KA_MSG from a child sensor.
-- **STATE_KEEP_ALIVE_PROCESS_CHILD_TX_ACK_MSG:** Creates and sends an ACK_MSG (including correction values) back to the child sensor.
-- **STATE_KEEP_ALIVE_PROCESS_CHILD_TX_ACK_MSG_COMPLETE:** Completes the transmission of the ACK_MSG. If additional child sensors are present, the process continues for the next child.
-- **STATE_KEEP_ALIVE_SLEEP:** Enters sleep mode, waking up either due to an alarm event or when the interval timer expires.
+- __STATE_KA_CF__: Initial state of keep alive state machine
+- __STATE_KA_CF_PROCESS_CHILD_RX_KA_MSG__: KA_MSG of child device received
+- __STATE_KA_CF_PROCESS_CHILD_TX_ACK_MSG__: Create TX_ACK message and send to child sensor
+- __STATE_KA_CF_PROCESS_CHILD_TX_ACK_MSG_COMPLETE__: Sending TX_ACK message completed
+- __STATE_KA_CF_TX_KA_MSG__: send KA_MSG
+- __STATE_KA_CF_START_RX_ACK__: start RF RX
+- __STATE_KA_CF_RX_ACK__: ACK_MSG received
+- __STATE_KA_CF_SLEEP__:  keep alive message handling completed, enter sleep/off mode
 
 This state machine ensures that each sensor maintains regular communication, processes messages from child sensors, and efficiently manages power consumption by entering sleep mode when appropriate.
 
-<img src="images/sensor_keep_alive_states.png" height="900"/> <br>
-
-| State                                              | State Machine Function                             |
-| :-                                                 | :-                                                 |
-| STATE_KEEP_ALIVE                                   | state_keep_alive                                   |
-| STATE_KEEP_ALIVE_TX_KA_MSG                         | state_keep_alive_tx_ka_msg                         |
-| STATE_KEEP_ALIVE_START_RX_ACK                      | state_keep_alive_start_rx_ack                      |
-| STATE_KEEP_ALIVE_RX_ACK                            | state_keep_alive_rx_ack                            |
-| STATE_KEEP_ALIVE_PROCESS_CHILD_RX_KA_MSG           | state_keep_alive_process_child_rx_ka_msg           |
-| STATE_KEEP_ALIVE_PROCESS_CHILD_TX_ACK_MSG          | state_keep_alive_process_child_tx_ack_msg          |
-| STATE_KEEP_ALIVE_PROCESS_CHILD_TX_ACK_MSG_COMPLETE | state_keep_alive_process_child_tx_ack_msg_complete |
-| STATE_KEEP_ALIVE_SLEEP                             | state_keep_alive_sleep                             |
+<img src="images/sensor_keep_alive_states.png"/>  
+  
+State                                           | State Machine Function
+--                                              |--
+STATE_KA_CF                                     | state_ka_cf
+STATE_KA_CF_PROCESS_CHILD_RX_KA_MSG             | state_ka_cf_process_child_rx_ka_msg
+STATE_KA_CF_PROCESS_CHILD_TX_ACK_MSG            | state_ka_cf_process_child_tx_ack_msg
+STATE_KA_CF_PROCESS_CHILD_TX_ACK_MSG_COMPLETE   | state_ka_cf_process_child_tx_ack_msg_complete
+STATE_KA_CF_TX_KA_MSG                           | state_ka_cf_tx_ka_msg
+STATE_KA_CF_START_RX_ACK                        | state_ka_cf_start_rx_ack
+STATE_KA_CF_RX_ACK                              | state_ka_cf_rx_ack
+STATE_KA_CF_SLEEP                               | state_ka_cf_sleep
 
 ### Learn
 The sensor learning process is managed by two dedicated state machines: one for child learning and one for parent learning. In child learning, the sensor is added to the network as a new device. In parent learning, the sensor is already part of the network and facilitates the addition of a child sensor.
 
-<img src="images/learn_c_s1_s11.png" height="700"/> <br>
+<img src="images/learn_c_s1_s11.png"/>  
 
 #### Child Learn
 This chapter describes the child learning process, detailing how a sensor device is added to the network as a new node through a dedicated state machine and specific pairing procedures. The child learning state machine guides this process with the following states:
 
-- **STATE_CHILD_SENSOR_LEARN_TX_PART_REQ:** Sends the PART_REQ command to the parent device to initiate pairing.
-- **STATE_CHILD_SENSOR_LEARN_START_RX_PART_REQ_RESP:** Starts RF receive mode to wait for the PART_REQ_RESP message from the parent.
-- **STATE_CHILD_SENSOR_LEARN_RX_PART_REQ_RESP:** Receives the PART_REQ_RESP message and restarts RF receive mode for further communication.
-- **STATE_CHILD_SENSOR_LEARN_RX_CON_VER_STAT:** Receives the CON_VER_STAT message, indicating the connection verification status.
-- **STATE_CHILD_SENSOR_LEARN_TX_ACK_MSG:** Creates an ACK_MSG and starts RF transmission to acknowledge receipt.
-- **STATE_CHILD_SENSOR_LEARN_TX_ACK_MSG_COMPLETE:** Completes the transmission of the ACK_MSG.
+- __STATE_CHILD_SENSOR_LEARN_TX_PART_REQ:__ Sends the PART_REQ command to the parent device to initiate pairing.
+- __STATE_CHILD_SENSOR_LEARN_START_RX_PART_REQ_RESP:__ Starts RF receive mode to wait for the PART_REQ_RESP message from the parent.
+- __STATE_CHILD_SENSOR_LEARN_RX_PART_REQ_RESP:__ Receives the PART_REQ_RESP message and restarts RF receive mode for further communication.
+- __STATE_CHILD_SENSOR_LEARN_RX_CON_VER_STAT:__ Receives the CON_VER_STAT message, indicating the connection verification status.
+- __STATE_CHILD_SENSOR_LEARN_TX_ACK_MSG:__ Creates an ACK_MSG and starts RF transmission to acknowledge receipt.
+- __STATE_CHILD_SENSOR_LEARN_TX_ACK_MSG_COMPLETE:__ Completes the transmission of the ACK_MSG.
 
 This sequence ensures secure and reliable integration of the sensor device into the network.
 
-<img src="images/sensor_child_learn_states.png" height="700"/> <br>
+<img src="images/sensor_child_learn_states.png"/>
 
-| State                                           | State Machine Function                          |
-| :-                                              | :-                                              |
-| STATE_CHILD_SENSOR_LEARN_TX_PART_REQ            | state_child_sensor_learn_tx_part_req            |
-| STATE_CHILD_SENSOR_LEARN_START_RX_PART_REQ_RESP | state_child_sensor_learn_start_rx_part_req_resp |
-| STATE_CHILD_SENSOR_LEARN_RX_PART_REQ_RESP       | state_child_sensor_learn_rx_part_req_resp       |
-| STATE_CHILD_SENSOR_LEARN_RX_CON_VER_STAT        | state_child_sensor_learn_rx_con_ver_stat        |
-| STATE_CHILD_SENSOR_LEARN_TX_ACK_MSG             | state_child_sensor_learn_tx_ack_msg             |
-| STATE_CHILD_SENSOR_LEARN_TX_ACK_MSG_COMPLETE    | state_child_sensor_learn_tx_ack_msg_complete    |
+State                                           | State Machine Function
+--                                              |--
+STATE_CHILD_SENSOR_LEARN_TX_PART_REQ            | state_child_sensor_learn_tx_part_req
+STATE_CHILD_SENSOR_LEARN_START_RX_PART_REQ_RESP | state_child_sensor_learn_start_rx_part_req_resp
+STATE_CHILD_SENSOR_LEARN_RX_PART_REQ_RESP       | state_child_sensor_learn_rx_part_req_resp
+STATE_CHILD_SENSOR_LEARN_RX_CON_VER_STAT        | state_child_sensor_learn_rx_con_ver_stat
+STATE_CHILD_SENSOR_LEARN_TX_ACK_MSG             | state_child_sensor_learn_tx_ack_msg
+STATE_CHILD_SENSOR_LEARN_TX_ACK_MSG_COMPLETE    | state_child_sensor_learn_tx_ack_msg_complete
 
 #### Parent Learn
 This chapter explains the parent learning process, in which a sensor device that is already part of the network facilitates the addition of a new child sensor through a dedicated state machine and defined communication steps. The parent learning state machine includes the following states:
 
-- **STATE_PARENT_LEARN_START_RX_PART_REQ:** Start RF receive mode to receive the PART_REQ message from the child sensor.
-- **STATE_PARENT_LEARN_RX_PART_REQ:** PART_REQ message received from the child sensor.
-- **STATE_PARENT_LEARN_TX_CON_VER_REQ:** Start RF transmit mode and send the CON_VER_REQ message to the parent sensor.
-- **STATE_PARENT_LEARN_START_RX_CON_VER_RESP:** Start RF receive mode to receive the CON_VER_RESP message from the parent sensor.
-- **STATE_PARENT_LEARN_RX_CON_VER_RESP:** CON_VER_RESP message received from the parent sensor.
-- **STATE_PARENT_LEARN_TX_PART_REQ_RESP:** Start RF transmit mode and send the PART_REQ_RESP message to the child sensor.
-- **STATE_PARENT_LEARN_TX_CON_VER_STAT:** Start RF transmit mode and send the CON_VER_STAT message to the child sensor.
-- **STATE_PARENT_LEARN_START_RX_ACK_MSG:** Start RF receive mode to receive the ACK_MSG from the child sensor.
-- **STATE_PARENT_LEARN_RX_ACK_MSG:** ACK_MSG received from the child sensor.
-- **STATE_PARENT_LEARN_TX_UD_MSG:** Start RF transmit mode and send the UD_MSG to the parent sensor.
-- **STATE_PARENT_LEARN_START_RX_ACK_MSG_UD:** Start RF receive mode to receive the ACK_MSG from the parent sensor.
-- **STATE_PARENT_LEARN_RX_ACK_MSG_UD:** ACK_MSG received from the parent sensor.
+- __STATE_PARENT_LEARN_START_RX_PART_REQ:__ Start RF receive mode to receive the PART_REQ message from the child sensor.
+- __STATE_PARENT_LEARN_RX_PART_REQ:__ PART_REQ message received from the child sensor.
+- __STATE_PARENT_LEARN_TX_CON_VER_REQ:__ Start RF transmit mode and send the CON_VER_REQ message to the parent sensor.
+- __STATE_PARENT_LEARN_START_RX_CON_VER_RESP:__ Start RF receive mode to receive the CON_VER_RESP message from the parent sensor.
+- __STATE_PARENT_LEARN_RX_CON_VER_RESP:__ CON_VER_RESP message received from the parent sensor.
+- __STATE_PARENT_LEARN_TX_PART_REQ_RESP:__ Start RF transmit mode and send the PART_REQ_RESP message to the child sensor.
+- __STATE_PARENT_LEARN_TX_CON_VER_STAT:__ Start RF transmit mode and send the CON_VER_STAT message to the child sensor.
+- __STATE_PARENT_LEARN_START_RX_ACK_MSG:__ Start RF receive mode to receive the ACK_MSG from the child sensor.
+- __STATE_PARENT_LEARN_RX_ACK_MSG:__ ACK_MSG received from the child sensor.
+- __STATE_PARENT_LEARN_TX_UD_MSG:__ Start RF transmit mode and send the UD_MSG to the parent sensor.
+- __STATE_PARENT_LEARN_START_RX_ACK_MSG_UD:__ Start RF receive mode to receive the ACK_MSG from the parent sensor.
+- __STATE_PARENT_LEARN_RX_ACK_MSG_UD:__ ACK_MSG received from the parent sensor.
 
 This sequence ensures that the parent sensor manages the integration of a new child sensor efficiently and reliably within the network.
 
-<img src="images/sensor_parent_learn_states.png" height="1200"/> <br>
+<img src="images/sensor_parent_learn_states.png"/>
 
-| State                                    | State Machine Function                          |
-| :-                                       | :-                                              |
-| STATE_PARENT_LEARN_START_RX_PART_REQ     | state_parent_sensor_learn_start_rx_part_req     |
-| STATE_PARENT_LEARN_RX_PART_REQ           | state_parent_sensor_learn_rx_part_req           |
-| STATE_PARENT_LEARN_TX_CON_VER_REQ        | state_parent_sensor_learn_tx_con_ver_req        |
-| STATE_PARENT_LEARN_START_RX_CON_VER_RESP | state_parent_sensor_learn_start_rx_con_ver_resp |
-| STATE_PARENT_LEARN_RX_CON_VER_RESP       | state_parent_sensor_learn_rx_con_ver_resp       |
-| STATE_PARENT_LEARN_TX_PART_REQ_RESP      | state_parent_sensor_learn_tx_part_req_resp      |
-| STATE_PARENT_LEARN_TX_CON_VER_STAT       | state_parent_sensor_learn_tx_con_ver_stat       |
-| STATE_PARENT_LEARN_START_RX_ACK_MSG      | state_parent_sensor_learn_start_rx_ack_msg      |
-| STATE_PARENT_LEARN_RX_ACK_MSG            | state_parent_sensor_learn_rx_ack_msg            |
-| STATE_PARENT_LEARN_TX_UD_MSG             | state_parent_sensor_learn_tx_ud_msg             |
-| STATE_PARENT_LEARN_START_RX_ACK_MSG_UD   | state_parent_sensor_learn_start_rx_ack_msg_ud   |
-| STATE_PARENT_LEARN_RX_ACK_MSG_UD         | state_parent_sensor_learn_rx_ack_msg_ud         |
+State                                    | State Machine Function
+--                                       |--
+STATE_PARENT_LEARN_START_RX_PART_REQ     | state_parent_sensor_learn_start_rx_part_req
+STATE_PARENT_LEARN_RX_PART_REQ           | state_parent_sensor_learn_rx_part_req
+STATE_PARENT_LEARN_TX_CON_VER_REQ        | state_parent_sensor_learn_tx_con_ver_req
+STATE_PARENT_LEARN_START_RX_CON_VER_RESP | state_parent_sensor_learn_start_rx_con_ver_resp
+STATE_PARENT_LEARN_RX_CON_VER_RESP       | state_parent_sensor_learn_rx_con_ver_resp
+STATE_PARENT_LEARN_TX_PART_REQ_RESP      | state_parent_sensor_learn_tx_part_req_resp
+STATE_PARENT_LEARN_TX_CON_VER_STAT       | state_parent_sensor_learn_tx_con_ver_stat
+STATE_PARENT_LEARN_START_RX_ACK_MSG      | state_parent_sensor_learn_start_rx_ack_msg
+STATE_PARENT_LEARN_RX_ACK_MSG            | state_parent_sensor_learn_rx_ack_msg
+STATE_PARENT_LEARN_TX_UD_MSG             | state_parent_sensor_learn_tx_ud_msg
+STATE_PARENT_LEARN_START_RX_ACK_MSG_UD   | state_parent_sensor_learn_start_rx_ack_msg_ud
+STATE_PARENT_LEARN_RX_ACK_MSG_UD         | state_parent_sensor_learn_rx_ack_msg_ud
 
 ### Reset Device Id
 
-**See also**<br>
-[Removing a Sensor from the Network](/apps/readme.md#removing-a-sensor-from-the-network)
+__See also__  
+[Removing a Sensor from the Network](/apps/README.md#removing-a-sensor-from-the-network)
 
-### EEPROM configuration
+### Sensor configuration
 
-| EEPROM Address | Variable             | Description                                                     |
-| :-             | :-                   | :-                                                              |
-| 0x280..0x281   | app_data.device_id   | 16-bit Device-ID, see sAppData_T.device_id                      |
-| 0x282..0x283   | app_data.parent_id   | 16-bit Device-ID of the parent device, see sAppData_T.parent_id |
-| 0x284..0x285   | app_data.child_id[0] | 16-bit Device-ID of the child id #0, see sAppData_T.child_id    |
-| 0x286..0x287   | app_data.child_id[1] | 16-bit Device-ID of the child id #1, see sAppData_T.child_id    |
-| 0x288..0x289   | app_data.child_id[2] | 16-bit Device-ID of the child id #2, see sAppData_T.child_id    |
-| 0x28A..0x28B   | app_data.child_id[3] | 16-bit Device-ID of the child id #3, see sAppData_T.child_id    |
-| 0x28C..0x28D   | app_data.child_id[4] | 16-bit Device-ID of the child id #4, see sAppData_T.child_id    |
-| 0x28E..0x28F   | app_data.ka_interval_correction | correction value to synchronize interval for KA_MSG processing (default: 0 = ~0ms ), see sAppData_T.ka_interval_correction |
-| 0x290..0x291   | app_data.rx_window_upper_treshold | rx_window upper threshold (default: 200 = ~100ms), see sAppData_T.rx_window_upper_threshold |
-| 0x292..0x293   | app_data.rx_window_lower_treshold | rx_window lower threshold (default: 80 = ~40ms), see sAppData_T.rx_window_lower_threshold |
-| 0x294..0x295   | app_data.correction_offset_up | correction_offset applied when rx_window > rx_window upper threshold (default: 40 = ~20ms), see sAppData_T.correction_offset_up |
-| 0x296..0x297   | app_data.correction_interval_up | correction_interval applied when rx_window > rx_window upper threshold (default: 0 = ~0ms), see sAppData_T.correction_interval_up |
-| 0x298..0x299   | app_data.correction_offset_mid | correction_offset applied when lower threshold < rx_window < upper_threshold (default: -10 = ~-5ms), see sAppData_T.correction_offset_mid |
-| 0x29A..0x29B   | app_data.correction_interval_mid | correction_interval applied when lower threshold < rx_window < upper_threshold (default: -10 = ~-5ms), see sAppData_T.correction_interval_mid |
-| 0x29C..0x29D   | app_data.correction_offset_low | correction_offset applied when rx_window < upper_threshold (default: 40 = ~20ms), see sAppData_T.correction_offset_low |
-| 0x29E..0x29F   | app_data.correction_interval_low | correction_interval applied when rx_window < upper_threshold (default: 10 = ~5ms), see sAppData_T.correction_interval_low |
+The sensor configuration is stored in SRAM of RTC device starting at address 0x20.
+RTC SRAM Address| Variable                          | Description
+--              |--                                 |-- 
+0x20..0x21      | app_data.device_id                | 16-bit Device-ID, see sAppData_T.device_id
+0x22..0x23      | app_data.parent_id                | 16-bit Device-ID of the parent device, see sAppData_T.parent_id
+0x24..0x25      | app_data.child_id[0]              | 16-bit Device-ID of the child id #0, see sAppData_T.child_id
+0x26..0x27      | app_data.child_id[1]              | 16-bit Device-ID of the child id #1, see sAppData_T.child_id
+0x28..0x29      | app_data.child_id[2]              | 16-bit Device-ID of the child id #2, see sAppData_T.child_id
+0x2A..0x2B      | app_data.child_id[3]              | 16-bit Device-ID of the child id #3, see sAppData_T.child_id
+0x2C..0x2D      | app_data.child_id[4]              | 16-bit Device-ID of the child id #4, see sAppData_T.child_id
+0x2E            | app_data.service_channel_config   | 8-bit SvcCh configuration used for RF communication
+0x2F            | app_data.status                   | 8-bit sensor status
+0x30            | app_data.count                    | 8-bit keep-alive counter (modulo 10)
+
+Default setting is stored in EEPROM of ATA8510 starting at address 0x2B0. Default setting is applied when resetting the sensor device id.
+
+EEPROM Address  | Variable                          | Value
+--              |--                                 |-- 
+0x2B0..0x2B1    | fac_data.device_id                | 0xFFFF
+0x2B2..0x2B3    | fac_data.parent_id                | 0xFFFF
+0x2B4..0x2B5    | fac_data.child_id[0]              | 0xFFFF
+0x2B6..0x2B7    | fac_data.child_id[1]              | 0xFFFF
+0x2B8..0x2B9    | fac_data.child_id[2]              | 0xFFFF
+0x2BA..0x2BB    | fac_data.child_id[3]              | 0xFFFF
+0x2BC..0x2BD    | fac_data.child_id[4]              | 0xFFFF
+0x2BE           | fac_data.service_channel_config   | 0x40
+0x2BF           | fac_data.status                   | 0x00
+0x2C0           | fac_data.count                    | 0x00
 
 [TOP](#contents)
 

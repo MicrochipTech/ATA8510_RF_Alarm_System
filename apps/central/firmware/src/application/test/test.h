@@ -81,10 +81,6 @@ extern "C" {
         PATTERN_STATE_LEARN_RX_ACK_MSG, /**< debug init for '::STATE_LEARN_RX_ACK_MSG' (0x46) */
         PATTERN_STATE_LEARN_PASS,   /**< debug init for '::STATE_LEARN_PASS' (0x47) */
         PATTERN_STATE_LEARN_FAIL,   /**< debug init for '::STATE_LEARN_FAIL' (0x48) */
-        /* ALARM*/
-        PATTERN_ALARM_STATE = 0x80, /**< debug init for 'ALARM_STATE' (0x80) */
-        PATTERN_STATE_ALARM = 0x80, /**< debug init for '::STATE_ALARM' (0x80) */
-        PATTERN_STATE_ALARM_TX_ACK_MSG_COMPLETE,    /**< debug init for '::STATE_ALARM_TX_ACK_MSG_COMPLETE' (0x81) */
         /* CONNECTION VERIFICATION */
         PATTERN_CONNECTION_VERIFICATION = 0x90, /**< debug init for 'CONNECTION_VERIFICATION' (0x90) */
         PATTERN_STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP = 0x90,   /**< debug init for '::STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP' (0x90) */
@@ -178,7 +174,7 @@ extern "C" {
      * Test main routine
      * @param p_msg message handle to parse in test module main routine
      */
-    extern void TEST_Tasks(sMSG_T *p_msg);
+    extern void TEST_Tasks(sMsg_T *p_msg);
     /**
      * Apply reset to sensor module 
      * @param address   sensor address

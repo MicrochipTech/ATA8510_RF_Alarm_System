@@ -63,7 +63,7 @@ extern "C" {
      * Console module main routine
      * @param p_msg message handle to parse in console module main routine
      */
-    extern void CONSOLE_Tasks(sMSG_T *p_msg);
+    extern void CONSOLE_Tasks(sMsg_T *p_msg);
 
     /* Provide C++ Compatibility */
 #ifdef __cplusplus

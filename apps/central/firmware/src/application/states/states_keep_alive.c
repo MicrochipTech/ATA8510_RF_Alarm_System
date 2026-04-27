@@ -1,5 +1,5 @@
 /* ************************************************************************** */
-/** Descriptive File Name
+/* Descriptive File Name
 
   @Company
     Company Name
@@ -14,6 +14,10 @@
     Describe the purpose of this file.
  */
 /* ************************************************************************** */
+
+/** \file states_keep_alive.c
+ * functions for keep alive state machine.
+ */
 
 /* ************************************************************************** */
 /* ************************************************************************** */
@@ -46,20 +50,38 @@
 // Section: Interface Functions                                               */
 /* ************************************************************************** */
 /* ************************************************************************** */
-
-void STATE_KeepAliveTxAck(sMSG_T *p_msg) {
+/** create and send keep alive TX_ACK message
+ * entered after KA_MSG received
+ * \param p_msg message to be handled
+ * 
+@startuml state_keep_alive_tx_ack
+start
+    - create ACK_MSG message
+    - measure time difference between slot and current time
+    - correct keep alive offset
+    - correct keep alive interval
+    - start TX Mode 
+    #APPLICATION: --> STATE_KEEP_ALIVE_TX_ACK_COMPLETE;
+stop
+@enduml
+ */
+void STATE_KeepAliveTxAck(sMsg_T *p_msg) {
     // send ack msg in correct slot
     int slot = APPLICATION_GetSensorSlot(app_data.ka_device_id);
+    
+    sSensor_T *p = APPLICATION_GetSensor(app_data.ka_device_id);
+    
     sCommandAckKaMsg_T ack_ka = {
         .hdr = {
             .id = app_data.device_id,
             .msg = ACK_MSG,
-            .sta = {
-                .bmz_update = 0,
+            .sta = 
+            {
+                .bmz_update = p->status.bmz_update,
                 .accept_device = 0,
-                .clear_blocked_list = 0,
+                .alarm = app_data.alarm,
                 .payload = 0,
-                .security = 0,  // TODO: define SECURITY_OFF/SECURITY_ON
+                .security = SECURITY_OFF,
                 .okay = 0,
                 .network = 0,
                 .battery = 0,
@@ -69,34 +91,39 @@ void STATE_KeepAliveTxAck(sMSG_T *p_msg) {
         .correction_interval = 0,
     };
     
-    if ( app_data.sensor_slot == slot ) {
-        ack_ka.correction_offset = 0;
-        ack_ka.correction_interval = 0;
-    } else if (app_data.sensor_slot == ((slot + 1)%NUMBER_OF_SENSORS )) {
-        ack_ka.correction_offset = -200; // reduce sleep time of sensor by 100ms for 1 interval cycle
-        ack_ka.correction_interval = -10; // reduce sleep time by 5ms for following cycles
-    } else if (app_data.sensor_slot == ((slot + 2)%NUMBER_OF_SENSORS )) {
-        ack_ka.correction_offset = -600; // reduce sleep time of sensor by 300ms for 1 interval cycle
-        ack_ka.correction_interval = -10; // reduce sleep time by 5ms for following cycles
-    } else if (app_data.sensor_slot == ((slot + 3)%NUMBER_OF_SENSORS )) {
-        ack_ka.correction_offset = 600; // extend sleep time of sensor by 300ms for 1 interval cycle
-        ack_ka.correction_interval = 10; // extend sleep time by 5ms for following cycles
-    } else if (app_data.sensor_slot == ((slot + 4)%NUMBER_OF_SENSORS )) {
-        ack_ka.correction_offset = 200; // extend sleep time by 100 ms for 1 interval cycle
-        ack_ka.correction_interval = 10; // extend sleep time by 5ms for following cycles
-    } else {
-    }
+    uint32_t time_stamp_1 = SYS_TIME_CounterGet();
+    uint32_t time_ms = SYS_TIME_CountToMS(time_stamp_1 - app_data.slot_time_stamp[slot]);
 
+    ack_ka.correction_offset = (int16_t)time_ms;
+    ack_ka.correction_interval = 0;
+    
     RF_SetTxModeBuffered(sizeof(ack_ka), (uint8_t *)&ack_ka);
-    STATE_SwitchState(STATE_KEEP_ALIVE_TX_ACK_COMPLETE);
+    STATE_SwitchState(STATE_KEEP_ALIVE_TX_ACK_COMPLETE, true);
 }
 
-void STATE_KeepAliveTxAckComplete(sMSG_T *p_msg) {
+/** ACK_MSG transmission completed
+ * \param p_msg message to be handled
+ * 
+@startuml state_keep_alive_tx_ack_complete
+start
+if (RF_IRQ == 1) then (yes)
+    if (RF.EVENTS.SYS_ERR == 1) then (yes)
+        - read out debug information
+    elseif (RF.EVENTS.EOTA == 1) then (yes)
+        #APPLICATION: --> STATE_IDLE;
+    endif
+endif
+stop
+@enduml
+ */
+void STATE_KeepAliveTxAckComplete(sMsg_T *p_msg) {
     if (p_msg->id == MSG_ID_RF_IRQ) {
-        //  TODO: Check for system error !!!
-        if ( rf_data.events.events.eota == 1 ) {
+        if (rf_data.events.system.sys_err == 1) {
+            SYS_DEBUG_MESSAGE(SYS_ERROR_DEBUG, "\r\nSYS_ERROR");
+            RF_GetDebug();
+        } else if ( rf_data.events.events.eota == 1 ) {
             // EXT2_GPIO1_Clear();
-            STATE_SwitchState(STATE_IDLE);
+            STATE_SwitchState(STATE_IDLE, false);
         }
     }
 }

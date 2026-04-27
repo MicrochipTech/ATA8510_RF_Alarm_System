@@ -164,7 +164,7 @@ __attribute__((naked,section(".interrupt_vectors"))) void start(void) {
  * needed to trigger state machine when button is pressed
  */
 void __interrupt(PCI1_vect_num) XC8_pinChange1_C(void) {
-    status.pin_change1_int = 1;
+    app_data.status.pin_change1_int = 1;
 }
 
 /**
@@ -228,5 +228,5 @@ void __interrupt(IDFULL_vect_num) XC8_IDscanBufferFullInterrupt_C(void) {
  * sets ::status.t4_comp_int flag
  */
 void __interrupt(T4COMP_vect_num) XC8_Timer4CompareInterrupt_C(void) {
-    status.t4_comp_int = 1;
+    app_data.status.t4_comp_int = 1;
 }

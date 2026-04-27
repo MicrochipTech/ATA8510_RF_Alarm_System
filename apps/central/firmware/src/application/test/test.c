@@ -53,7 +53,7 @@ static void _TEST_MuxSetAddress(uint8_t address) {
 }
 
 static void _TEST_SwitchPressedCallback(uintptr_t context){
-    sMSG_T msg;
+    sMsg_T msg;
     // msg.id = MSG_ID_CONSOLE_CMD_TEST;
     msg.id = MSG_ID_CONSOLE_CMD_START_LEARN_CENTRAL;
     xQueueSend(app_data.msg_queue, &msg, 0);
@@ -72,7 +72,7 @@ void TEST_Initialize(void) {
     _TEST_MuxSetAddress(0x00);
 }
 
-void TEST_Tasks(sMSG_T *p_msg) {
+void TEST_Tasks(sMsg_T *p_msg) {
     if ( p_msg->id == MSG_ID_CONSOLE_CMD_TEST ) {
         SYS_DEBUG_MESSAGE(SYS_ERROR_DEBUG, "\r\nTEST\r\n");
 #if true
@@ -150,9 +150,6 @@ uint8_t TEST_GetPattern(uint8_t state) {
         {STATE_LEARN_RX_ACK_MSG, PATTERN_STATE_LEARN_RX_ACK_MSG},
         {STATE_LEARN_PASS, PATTERN_STATE_LEARN_PASS},
         {STATE_LEARN_FAIL, PATTERN_STATE_LEARN_FAIL},
-        {0xFF, PATTERN_ALARM_STATE},
-        {STATE_ALARM, PATTERN_STATE_ALARM},    
-        {STATE_ALARM_TX_ACK_MSG_COMPLETE, PATTERN_STATE_ALARM_TX_ACK_MSG_COMPLETE},
         { STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP, PATTERN_STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP },
         { STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP_COMPLETE, PATTERN_STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP_COMPLETE },
         { STATE_UPDATE_TX_ACK, PATTERN_STATE_UPDATE_TX_ACK },

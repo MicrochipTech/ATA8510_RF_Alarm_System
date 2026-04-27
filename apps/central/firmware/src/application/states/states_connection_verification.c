@@ -1,5 +1,5 @@
 /* ************************************************************************** */
-/** Descriptive File Name
+/* Descriptive File Name
 
   @Company
     Company Name
@@ -14,6 +14,10 @@
     Describe the purpose of this file.
  */
 /* ************************************************************************** */
+
+/** \file states_connection_verification.c
+ * functions for connection verification state machine
+ */
 
 /* ************************************************************************** */
 /* ************************************************************************** */
@@ -45,8 +49,18 @@
 /* ************************************************************************** */
 /* ************************************************************************** */
 
-
-void STATE_ConnectionVerificationTxConVerResp(sMSG_T* p_msg) {
+/** create and send CON_VER_RESP message
+ * \param p_msg message to be handled
+ * 
+@startuml state_connection_verification_tx_con_ver_resp
+start
+   - Create CON_VER_RESP message
+   - Set TX Mode
+   #APPLICATION: --> STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP_COMPLETE;
+stop
+@enduml
+ */
+void STATE_ConnectionVerificationTxConVerResp(sMsg_T* p_msg) {
 
     sCommandConVerResp_T resp = {
         .hdr = {
@@ -55,9 +69,9 @@ void STATE_ConnectionVerificationTxConVerResp(sMSG_T* p_msg) {
             .sta = {
                 .bmz_update = 0,
                 .accept_device = 1,
-                .clear_blocked_list = 0,
+                .alarm = ALARM_OFF,
                 .payload = 0,
-                .security = 0,  // TODO: define SECURITY_OFF/SECURITY_ON
+                .security = SECURITY_OFF,
                 .okay = 0,
                 .network = 0,
                 .battery = 0,
@@ -68,15 +82,32 @@ void STATE_ConnectionVerificationTxConVerResp(sMSG_T* p_msg) {
 
     RF_SetTxModeBuffered(sizeof(resp), (uint8_t *)&resp);
     // EXT2_GPIO1_Clear();
-    STATE_SwitchState(STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP_COMPLETE);    
+    STATE_SwitchState(STATE_CONNECTION_VERIFICATION_TX_CON_VER_RESP_COMPLETE, true);    
 }
 
-void STATE_ConnectionVerificationTxConVerRespComplete(sMSG_T* p_msg){
+/** CON_VER_RESP command transmission complete
+ * \param p_msg message to be handled
+ * 
+@startuml
+start
+if (RF_IRQ == 1) then (yes)
+    if (RF.EVENTS.SYS_ERR == 1) then (yes)
+        - read out debug information
+    elseif (RF.EVENTS.EOTA == 1) then (yes)
+        #APPLICATION: --> STATE_IDLE;
+    endif
+endif
+stop
+@enduml
+ */
+void STATE_ConnectionVerificationTxConVerRespComplete(sMsg_T* p_msg){
     if (p_msg->id == MSG_ID_RF_IRQ) {
-        //  TODO: Check for system error !!!
-        if ( rf_data.events.events.eota == 1 ) {
+        if (rf_data.events.system.sys_err == 1) {
+            SYS_DEBUG_MESSAGE(SYS_ERROR_DEBUG, "\r\nSYS_ERROR");
+            RF_GetDebug();
+        } else if ( rf_data.events.events.eota == 1 ) {
             // EXT2_GPIO1_Clear();
-            STATE_SwitchState(STATE_IDLE);
+            STATE_SwitchState(STATE_IDLE, true);
         }
     }
 }
